@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
-import type { AppRole } from "@/lib/auth/roles";
+import {
+  getAppRoleFromClaims,
+  ROLE_HOME_PATHS,
+  type AppRole,
+} from "@/lib/auth/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function requireAuthenticatedUser(
@@ -13,9 +17,16 @@ export async function requireAuthenticatedUser(
     redirect(loginPath);
   }
 
-  // TODO(auth-roles): Compare a signed app_metadata role with expectedRole.
-  // Authentication is enforced now; role authorization is intentionally deferred.
-  void expectedRole;
+  const role = getAppRoleFromClaims(data.claims);
+
+  if (!role) {
+    await supabase.auth.signOut();
+    redirect(`${loginPath}?notice=invalid-role`);
+  }
+
+  if (role !== expectedRole) {
+    redirect(ROLE_HOME_PATHS[role]);
+  }
 
   return data.claims;
 }

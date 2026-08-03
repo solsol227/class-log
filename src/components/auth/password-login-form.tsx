@@ -13,6 +13,7 @@ type LoginMode = "operator" | "student";
 
 type PasswordLoginFormProps = {
   mode: LoginMode;
+  initialNotice?: string;
 };
 
 const loginConfig = {
@@ -23,7 +24,6 @@ const loginConfig = {
     identifierPlaceholder: "이메일을 입력하세요",
     autoComplete: "email",
     buttonLabel: "운영자로 로그인",
-    destination: "/operator",
   },
   student: {
     identifierLabel: "닉네임",
@@ -32,14 +32,21 @@ const loginConfig = {
     identifierPlaceholder: "닉네임을 입력하세요",
     autoComplete: "username",
     buttonLabel: "학생으로 로그인",
-    destination: "/student",
   },
 } as const;
 
-export function PasswordLoginForm({ mode }: PasswordLoginFormProps) {
+type RoleCheckResponse = {
+  destination?: "/operator" | "/student";
+  message?: string;
+};
+
+export function PasswordLoginForm({
+  mode,
+  initialNotice = "",
+}: PasswordLoginFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState(initialNotice);
   const config = loginConfig[mode];
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -73,7 +80,21 @@ export function PasswordLoginForm({ mode }: PasswordLoginFormProps) {
         return;
       }
 
-      router.replace(config.destination);
+      const roleResponse = await fetch("/api/auth/role", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const roleResult = (await roleResponse.json()) as RoleCheckResponse;
+
+      if (!roleResponse.ok || !roleResult.destination) {
+        setErrorMessage(
+          roleResult.message ??
+            "계정 권한을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+        );
+        return;
+      }
+
+      router.replace(roleResult.destination);
       router.refresh();
     } catch (error) {
       if (error instanceof InvalidStudentNicknameError) {
