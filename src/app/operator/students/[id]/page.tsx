@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type OperatorStudentDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ created?: string }>;
 };
 
 const UUID_PATTERN =
@@ -43,10 +44,12 @@ function formatCreatedAt(createdAt: string) {
 
 export default async function OperatorStudentDetailPage({
   params,
+  searchParams,
 }: OperatorStudentDetailPageProps) {
   await requireAuthenticatedUser("/login/operator", "operator");
 
   const { id } = await params;
+  const { created } = await searchParams;
 
   if (!UUID_PATTERN.test(id)) {
     return <StudentNotFound />;
@@ -76,6 +79,15 @@ export default async function OperatorStudentDetailPage({
       >
         학생 목록
       </Link>
+
+      {created === "1" ? (
+        <p
+          role="status"
+          className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900"
+        >
+          학생이 등록되었습니다.
+        </p>
+      ) : null}
 
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8">
         <p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">

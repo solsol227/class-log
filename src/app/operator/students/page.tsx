@@ -17,13 +17,21 @@ export default async function OperatorStudentsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
-      <header>
-        <p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">
-          클래스로그
-        </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
-          학생 목록
-        </h1>
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">
+            클래스로그
+          </p>
+          <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
+            학생 목록
+          </h1>
+        </div>
+        <Link
+          href="/operator/students/new"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        >
+          학생 등록
+        </Link>
       </header>
 
       {students.length === 0 ? (
