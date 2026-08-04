@@ -42,6 +42,17 @@ function formatCreatedAt(createdAt: string) {
   }).format(date);
 }
 
+function formatPlanMonth(month: string) {
+  const [year, monthNumber] = month.split("-");
+  return `${year}년 ${Number(monthNumber)}월`;
+}
+
+const PLAN_STATUS_LABELS: Record<string, string> = {
+  draft: "초안",
+  published: "게시됨",
+  completed: "완료",
+};
+
 export default async function OperatorStudentDetailPage({
   params,
   searchParams,
@@ -69,6 +80,16 @@ export default async function OperatorStudentDetailPage({
 
   if (!student) {
     return <StudentNotFound />;
+  }
+
+  const { data: plans, error: plansError } = await supabase
+    .from("monthly_activity_plans")
+    .select("id, month, title, status")
+    .eq("student_id", id)
+    .order("month", { ascending: false });
+
+  if (plansError) {
+    console.error(plansError);
   }
 
   return (
@@ -108,6 +129,41 @@ export default async function OperatorStudentDetailPage({
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h2 className="text-2xl font-bold">월간 활동 계획</h2>
+          <Link
+            href={`/operator/students/${id}/plans/new`}
+            className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]"
+          >
+            새 월간 계획 만들기
+          </Link>
+        </div>
+
+        {plansError ? (
+          <p role="alert" className="mt-5 text-[var(--muted)]">월간 활동 계획을 불러오지 못했습니다.</p>
+        ) : plans.length === 0 ? (
+          <p className="mt-5 text-[var(--muted)]">아직 등록된 월간 활동 계획이 없습니다.</p>
+        ) : (
+          <ul className="mt-5 space-y-3">
+            {plans.map((plan) => (
+              <li key={plan.id}>
+                <Link
+                  href={`/operator/students/${id}/plans/${plan.id}`}
+                  className="block rounded-xl border border-[var(--line)] p-4 hover:border-[var(--accent)]"
+                >
+                  <span className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold">{plan.title}</span>
+                    <span className="text-sm font-bold text-[var(--accent-strong)]">{PLAN_STATUS_LABELS[plan.status] ?? plan.status}</span>
+                  </span>
+                  <span className="mt-2 block text-sm text-[var(--muted)]">{formatPlanMonth(plan.month)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </main>
   );
