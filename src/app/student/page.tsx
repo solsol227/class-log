@@ -13,6 +13,7 @@ export default async function StudentPage({ searchParams }: StudentPageProps) {
     <AuthenticatedPlaceholder
       role="student"
       notice={getAuthNoticeMessage(notice)}
+      featureLink={{ href: "/student/plans", label: "내 월간 계획 보기" }}
     />
   );
 }

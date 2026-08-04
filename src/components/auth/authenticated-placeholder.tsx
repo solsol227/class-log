@@ -7,6 +7,10 @@ import type { AuthUserMessage } from "@/lib/auth/errors";
 type AuthenticatedPlaceholderProps = {
   role: AppRole;
   notice?: AuthUserMessage | null;
+  featureLink?: {
+    href: string;
+    label: string;
+  };
 };
 
 const content = {
@@ -23,6 +27,7 @@ const content = {
 export function AuthenticatedPlaceholder({
   role,
   notice = null,
+  featureLink,
 }: AuthenticatedPlaceholderProps) {
   const pageContent = content[role];
 
@@ -49,6 +54,14 @@ export function AuthenticatedPlaceholder({
             {pageContent.description}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
+            {featureLink ? (
+              <Link
+                href={featureLink.href}
+                className="flex min-h-12 items-center rounded-xl bg-[var(--accent)] px-5 font-bold text-white transition hover:bg-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              >
+                {featureLink.label}
+              </Link>
+            ) : null}
             <LogoutButton />
             <Link
               href="/"
