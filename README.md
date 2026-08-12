@@ -39,9 +39,12 @@ npm install
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SECRET_KEY=
 ```
 
 `.env.local`은 Git에 포함되지 않습니다. 실제 키, 비밀번호, 개인정보를 코드나 README에 기록하거나 커밋하지 마세요. 현재 화면 확인에는 Supabase 값이 필요하지 않습니다.
+
+`SUPABASE_SECRET_KEY`는 서버 전용 비밀키이며 브라우저 코드에 전달하거나 노출하면 안 됩니다.
 
 ## 개발 서버 실행
 
