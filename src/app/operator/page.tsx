@@ -13,6 +13,7 @@ export default async function OperatorPage({ searchParams }: OperatorPageProps) 
     <AuthenticatedPlaceholder
       role="operator"
       notice={getAuthNoticeMessage(notice)}
+      featureLink={{ href: "/operator/students", label: "학생 관리" }}
     />
   );
 }

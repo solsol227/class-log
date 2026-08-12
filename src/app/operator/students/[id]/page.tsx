@@ -133,6 +133,23 @@ export default async function OperatorStudentDetailPage({
 
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold">수업 일정</h2>
+            <p className="mt-2 text-[var(--muted)]">
+              학생의 수업 일정을 확인하고 새 수업을 등록할 수 있습니다.
+            </p>
+          </div>
+          <Link
+            href={`/operator/students/${id}/lessons`}
+            className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]"
+          >
+            수업 일정 보기
+          </Link>
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-2xl font-bold">월간 활동 계획</h2>
           <Link
             href={`/operator/students/${id}/plans/new`}
