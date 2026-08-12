@@ -5,6 +5,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+.pnpm-debug.log*
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -34,49 +35,53 @@ bower_components
 # node-waf configuration
 .lock-wscript
 
-# Compiled binary addons (https://nodejs.org/api/addons.html)
+# Compiled binary addons
 build/Release
 
 # Dependency directories
 node_modules/
 jspm_packages/
 
-# Snowpack dependency directory (https://snowpack.dev/)
+# Snowpack dependency directory
 web_modules/
 
 # TypeScript cache
 *.tsbuildinfo
+next-env.d.ts
 
 # Optional npm cache directory
 .npm
 
-# Optional eslint cache
+# Optional lint caches
 .eslintcache
-
-# Optional stylelint cache
 .stylelintcache
 
 # Optional REPL history
 .node_repl_history
 
-# Output of 'npm pack'
+# Output of npm pack
 *.tgz
 
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variable files
+# Environment variable files
 .env
+.env.local
+.env*.local
 .env.*
 !.env.example
 
-# parcel-bundler cache (https://parceljs.org/)
+# Parcel cache
 .cache
 .parcel-cache
 
 # Next.js build output
-.next
-out
+.next/
+out/
+
+# Production output
+build/
 
 # Nuxt.js build / generate output
 .nuxt
@@ -85,23 +90,18 @@ dist
 
 # Gatsby files
 .cache/
-# Comment in the public line in if your project uses Gatsby and not Next.js
-# https://nextjs.org/blog/next-9-1#public-directory-support
-# public
 
-# vuepress build output
+# VuePress build output
 .vuepress/dist
 
-# vuepress v2.x temp directory
+# VuePress v2.x temp directory
 .temp
 
-# Sveltekit cache directory
+# SvelteKit cache directory
 .svelte-kit/
 
-# vitepress build output
+# VitePress output and cache
 **/.vitepress/dist
-
-# vitepress cache directory
 **/.vitepress/cache
 
 # Docusaurus cache and generated files
@@ -122,7 +122,7 @@ dist
 # TernJS port file
 .tern-port
 
-# Stores VSCode versions used for testing VSCode extensions
+# Stores VSCode versions used for testing extensions
 .vscode-test
 
 # pnpm
@@ -141,3 +141,8 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Deployment and local operating-system files
+.vercel
+.DS_Store
+*.pem
