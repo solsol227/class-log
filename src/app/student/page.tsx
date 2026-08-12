@@ -1,7 +1,18 @@
 import { AuthenticatedPlaceholder } from "@/components/auth/authenticated-placeholder";
+import { getAuthNoticeMessage } from "@/lib/auth/errors";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 
-export default async function StudentPage() {
+type StudentPageProps = {
+  searchParams: Promise<{ notice?: string }>;
+};
+
+export default async function StudentPage({ searchParams }: StudentPageProps) {
   await requireAuthenticatedUser("/login/student", "student");
-  return <AuthenticatedPlaceholder role="student" />;
+  const { notice } = await searchParams;
+  return (
+    <AuthenticatedPlaceholder
+      role="student"
+      notice={getAuthNoticeMessage(notice)}
+    />
+  );
 }

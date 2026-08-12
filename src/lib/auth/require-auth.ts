@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getAppRoleFromClaims,
@@ -10,11 +11,17 @@ export async function requireAuthenticatedUser(
   loginPath: "/login/operator" | "/login/student",
   expectedRole: AppRole,
 ) {
+  const cookieStore = await cookies();
+  const hadAuthCookie = cookieStore.getAll().some(
+    ({ name }) => name.startsWith("sb-") && name.includes("-auth-token"),
+  );
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getClaims();
 
   if (error || !data?.claims) {
-    redirect(loginPath);
+    redirect(
+      hadAuthCookie ? `${loginPath}?notice=session-expired` : loginPath,
+    );
   }
 
   const role = getAppRoleFromClaims(data.claims);
@@ -25,7 +32,7 @@ export async function requireAuthenticatedUser(
   }
 
   if (role !== expectedRole) {
-    redirect(ROLE_HOME_PATHS[role]);
+    redirect(`${ROLE_HOME_PATHS[role]}?notice=forbidden-route`);
   }
 
   return data.claims;

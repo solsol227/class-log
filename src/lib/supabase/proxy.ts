@@ -5,6 +5,7 @@ import {
   ROLE_HOME_PATHS,
   type AppRole,
 } from "@/lib/auth/roles";
+import type { AuthNotice } from "@/lib/auth/errors";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 const protectedRoutes = [
@@ -16,7 +17,7 @@ function redirectWithCookies(
   request: NextRequest,
   cookieResponse: NextResponse,
   pathname: string,
-  notice?: "invalid-role",
+  notice?: AuthNotice,
 ) {
   const redirectUrl = request.nextUrl.clone();
   redirectUrl.pathname = pathname;
@@ -53,6 +54,9 @@ export async function updateSupabaseSession(request: NextRequest) {
     },
   });
 
+  const hadAuthCookie = request.cookies.getAll().some(
+    ({ name }) => name.startsWith("sb-") && name.includes("-auth-token"),
+  );
   const { data, error } = await supabase.auth.getClaims();
   const protectedRoute = protectedRoutes.find(({ prefix }) =>
     request.nextUrl.pathname.startsWith(prefix),
@@ -63,7 +67,16 @@ export async function updateSupabaseSession(request: NextRequest) {
   }
 
   if (error || !data?.claims) {
-    return redirectWithCookies(request, response, protectedRoute.loginPath);
+    if (hadAuthCookie) {
+      await supabase.auth.signOut();
+    }
+
+    return redirectWithCookies(
+      request,
+      response,
+      protectedRoute.loginPath,
+      hadAuthCookie ? "session-expired" : undefined,
+    );
   }
 
   const role = getAppRoleFromClaims(data.claims);
@@ -79,7 +92,12 @@ export async function updateSupabaseSession(request: NextRequest) {
   }
 
   if (role !== (protectedRoute.role as AppRole)) {
-    return redirectWithCookies(request, response, ROLE_HOME_PATHS[role]);
+    return redirectWithCookies(
+      request,
+      response,
+      ROLE_HOME_PATHS[role],
+      "forbidden-route",
+    );
   }
 
   return response;

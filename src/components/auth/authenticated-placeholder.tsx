@@ -2,9 +2,11 @@ import Link from "next/link";
 import type { AppRole } from "@/lib/auth/roles";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { DemoNotice } from "@/components/demo-notice";
+import type { AuthUserMessage } from "@/lib/auth/errors";
 
 type AuthenticatedPlaceholderProps = {
   role: AppRole;
+  notice?: AuthUserMessage | null;
 };
 
 const content = {
@@ -20,6 +22,7 @@ const content = {
 
 export function AuthenticatedPlaceholder({
   role,
+  notice = null,
 }: AuthenticatedPlaceholderProps) {
   const pageContent = content[role];
 
@@ -27,6 +30,15 @@ export function AuthenticatedPlaceholder({
     <div className="flex min-h-[100dvh] flex-col">
       <main className="mx-auto flex w-full max-w-3xl flex-1 items-center px-5 py-12 sm:px-8">
         <section className="w-full rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8">
+          {notice ? (
+            <div
+              role="alert"
+              className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
+            >
+              <p className="font-bold">{notice.message}</p>
+              <p className="mt-1 text-amber-900">{notice.action}</p>
+            </div>
+          ) : null}
           <p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">
             클래스로그
           </p>
