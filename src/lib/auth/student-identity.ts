@@ -13,13 +13,13 @@ export function normalizeStudentNickname(nickname: string) {
   const normalized = nickname.normalize("NFKC").trim().toLowerCase();
 
   if (!normalized) {
-    throw new InvalidStudentNicknameError("닉네임을 입력해 주세요.");
+    throw new InvalidStudentNicknameError("이름을 입력해 주세요.");
   }
 
   const bytes = new TextEncoder().encode(normalized);
 
   if (bytes.length > MAX_NICKNAME_UTF8_BYTES) {
-    throw new InvalidStudentNicknameError("닉네임이 너무 깁니다.");
+    throw new InvalidStudentNicknameError("이름이 너무 깁니다.");
   }
 
   return normalized;

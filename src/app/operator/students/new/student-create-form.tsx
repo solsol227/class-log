@@ -84,19 +84,11 @@ export function StudentCreateForm() {
 
       <FormField
         id="nickname"
-        label="닉네임"
+        label="이름"
         name="nickname"
         autoComplete="username"
         error={state.fieldErrors.nickname}
         defaultValue={state.values?.nickname}
-      />
-      <FormField
-        id="display-name"
-        label="표시 이름 (선택)"
-        name="display_name"
-        autoComplete="name"
-        error={state.fieldErrors.displayName}
-        defaultValue={state.values?.displayName}
       />
       <FormField
         id="password"

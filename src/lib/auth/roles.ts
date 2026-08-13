@@ -2,9 +2,12 @@ export const APP_ROLES = ["operator", "student"] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
 
-export const ROLE_HOME_PATHS: Record<AppRole, "/operator" | "/student"> = {
-  operator: "/operator",
-  student: "/student",
+export const ROLE_HOME_PATHS: Record<
+  AppRole,
+  "/operator/schedules" | "/student/schedule"
+> = {
+  operator: "/operator/schedules",
+  student: "/student/schedule",
 };
 
 export function isAppRole(value: unknown): value is AppRole {

@@ -68,7 +68,7 @@ export async function saveAttendance(
   const supabase = await createSupabaseServerClient();
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
-    .select("id, student_id, starts_at, status")
+    .select("id, starts_at, status")
     .eq("id", lessonId)
     .maybeSingle();
 
@@ -79,7 +79,15 @@ export async function saveAttendance(
     return { fieldErrors: {}, formError: LESSON_NOT_FOUND_ERROR, values };
   }
 
-  if (lesson.student_id !== studentId) {
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("lesson_assignments")
+    .select("lesson_id")
+    .eq("lesson_id", lessonId)
+    .eq("student_id", studentId)
+    .maybeSingle();
+
+  if (assignmentError || !assignment) {
+    if (assignmentError) console.error(assignmentError);
     return { fieldErrors: {}, formError: LESSON_NOT_FOUND_ERROR, values };
   }
 
@@ -110,6 +118,7 @@ export async function saveAttendance(
       .from("attendance_records")
       .select("id, student_id")
       .eq("lesson_id", lesson.id)
+      .eq("student_id", studentId)
       .maybeSingle();
 
   if (attendanceLookupError) {
@@ -117,10 +126,7 @@ export async function saveAttendance(
     return { fieldErrors: {}, formError: GENERIC_ERROR, values };
   }
 
-  if (
-    existingAttendance &&
-    existingAttendance.student_id !== lesson.student_id
-  ) {
+  if (existingAttendance && existingAttendance.student_id !== studentId) {
     return { fieldErrors: {}, formError: GENERIC_ERROR, values };
   }
 
@@ -132,7 +138,7 @@ export async function saveAttendance(
       .update({ status, memo })
       .eq("id", existingAttendance.id)
       .eq("lesson_id", lesson.id)
-      .eq("student_id", lesson.student_id)
+      .eq("student_id", studentId)
       .select("id")
       .maybeSingle();
 
@@ -146,7 +152,7 @@ export async function saveAttendance(
       .from("attendance_records")
       .insert({
         lesson_id: lesson.id,
-        student_id: lesson.student_id,
+        student_id: studentId,
         status,
         memo,
       });
@@ -158,7 +164,7 @@ export async function saveAttendance(
         .from("attendance_records")
         .update({ status, memo })
         .eq("lesson_id", lesson.id)
-        .eq("student_id", lesson.student_id)
+        .eq("student_id", studentId)
         .select("id")
         .maybeSingle();
 
@@ -181,7 +187,6 @@ export async function saveAttendance(
       .from("lessons")
       .update({ status: "completed" })
       .eq("id", lesson.id)
-      .eq("student_id", lesson.student_id)
       .eq("status", "scheduled")
       .select("id")
       .maybeSingle();
@@ -195,7 +200,6 @@ export async function saveAttendance(
         .from("lessons")
         .select("status")
         .eq("id", lesson.id)
-        .eq("student_id", lesson.student_id)
         .maybeSingle();
 
       if (currentLessonError) {

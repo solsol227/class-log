@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { DemoNotice } from "@/components/demo-notice";
 
@@ -15,14 +14,6 @@ export function LoginShell({
 }: LoginShellProps) {
   return (
     <div className="flex min-h-[100dvh] flex-col">
-      <header className="mx-auto flex h-20 w-full max-w-7xl items-center px-5 sm:px-8 lg:px-12">
-        <Link
-          href="/"
-          className="font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent)]"
-        >
-          ← 홈으로
-        </Link>
-      </header>
       <main className="mx-auto flex w-full max-w-7xl flex-1 items-center px-5 py-8 sm:px-8 lg:px-12">
         <div className="grid w-full gap-10 md:grid-cols-[minmax(0,0.8fr)_minmax(360px,0.65fr)] md:justify-between md:gap-16">
           <section className="max-w-xl self-center">

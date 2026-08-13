@@ -79,16 +79,24 @@ export default async function LessonDetailPage({
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: lesson, error } = await supabase
-    .from("lessons")
-    .select("id, student_id, title, starts_at, ends_at, location, notes, status")
-    .eq("id", lessonId)
-    .eq("student_id", studentId)
-    .maybeSingle();
+  const [{ data: lesson, error }, { data: assignment, error: assignmentError }] =
+    await Promise.all([
+      supabase
+        .from("lessons")
+        .select("id, title, starts_at, ends_at, location, notes, status")
+        .eq("id", lessonId)
+        .maybeSingle(),
+      supabase
+        .from("lesson_assignments")
+        .select("lesson_id")
+        .eq("lesson_id", lessonId)
+        .eq("student_id", studentId)
+        .maybeSingle(),
+    ]);
 
-  if (error || !lesson) {
-    if (error) {
-      console.error(error);
+  if (error || assignmentError || !lesson || !assignment) {
+    if (error || assignmentError) {
+      console.error(error ?? assignmentError);
     }
     return <LessonUnavailable studentId={studentId} />;
   }
@@ -97,7 +105,7 @@ export default async function LessonDetailPage({
     .from("attendance_records")
     .select("id, status, memo, recorded_at, updated_at")
     .eq("lesson_id", lesson.id)
-    .eq("student_id", lesson.student_id)
+    .eq("student_id", studentId)
     .maybeSingle();
 
   if (attendanceError) {

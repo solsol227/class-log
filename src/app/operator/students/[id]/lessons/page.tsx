@@ -59,7 +59,7 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
   const supabase = await createSupabaseServerClient();
   const { data: student, error: studentError } = await supabase
     .from("students")
-    .select("id, nickname, display_name")
+    .select("id, nickname")
     .eq("id", studentId)
     .maybeSingle();
 
@@ -70,14 +70,23 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
     return <StudentUnavailable />;
   }
 
-  const { data: lessons, error: lessonsError } = await supabase
-    .from("lessons")
-    .select("id, title, starts_at, ends_at, status")
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("lesson_assignments")
+    .select("lesson_id")
     .eq("student_id", studentId)
-    .order("starts_at", { ascending: true });
+    .order("assigned_at", { ascending: true });
 
-  if (lessonsError) {
-    console.error(lessonsError);
+  const lessonIds = assignments?.map((assignment) => assignment.lesson_id) ?? [];
+  const { data: lessons, error: lessonsError } = lessonIds.length > 0
+    ? await supabase
+        .from("lessons")
+        .select("id, title, starts_at, ends_at, status")
+        .in("id", lessonIds)
+        .order("starts_at", { ascending: true })
+    : { data: [], error: null };
+
+  if (assignmentsError || lessonsError) {
+    console.error(assignmentsError ?? lessonsError);
   }
 
   return (
@@ -92,21 +101,21 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
       <header className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-bold text-[var(--accent-strong)]">
-            {student.display_name || student.nickname}
+            {student.nickname}
           </p>
           <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">
             수업 일정
           </h1>
         </div>
         <Link
-          href={`/operator/students/${studentId}/lessons/new`}
+          href="/operator/schedules/new"
           className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]"
         >
-          새 수업 등록
+          공통 일정 등록
         </Link>
       </header>
 
-      {lessonsError ? (
+      {assignmentsError || lessonsError ? (
         <p
           role="alert"
           className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-6 text-[var(--muted)]"

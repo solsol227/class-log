@@ -2,13 +2,14 @@ import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function OperatorStudentsPage() {
+export default async function OperatorStudentsPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   await requireAuthenticatedUser("/login/operator", "operator");
+  const { deleted } = await searchParams;
 
   const supabase = await createSupabaseServerClient();
   const { data: students, error } = await supabase
     .from("students")
-    .select("id, nickname, display_name")
+    .select("id, nickname")
     .order("nickname", { ascending: true });
 
   if (error) {
@@ -34,6 +35,8 @@ export default async function OperatorStudentsPage() {
         </Link>
       </header>
 
+      {deleted === "1" ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">학생과 로그인 계정을 삭제했습니다.</p> : null}
+
       {students.length === 0 ? (
         <p className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-6 text-[var(--muted)]">
           등록된 학생이 없습니다.
@@ -46,12 +49,7 @@ export default async function OperatorStudentsPage() {
                 href={`/operator/students/${student.id}`}
                 className="block rounded-2xl border border-[var(--line)] bg-white p-5 shadow-[0_16px_45px_rgba(23,64,60,0.06)] transition hover:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
               >
-                <span className="block text-lg font-bold">
-                  {student.display_name || student.nickname}
-                </span>
-                <span className="mt-1 block text-sm text-[var(--muted)]">
-                  닉네임: {student.nickname}
-                </span>
+                <span className="block text-lg font-bold">{student.nickname}</span>
               </Link>
             </li>
           ))}

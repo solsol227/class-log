@@ -132,7 +132,6 @@ export async function createLesson(
   const { data: lesson, error: insertError } = await supabase
     .from("lessons")
     .insert({
-      student_id: studentId,
       title,
       starts_at: startsAt,
       ends_at: endsAt,
@@ -147,5 +146,19 @@ export async function createLesson(
     return { fieldErrors: {}, formError: GENERIC_ERROR, values };
   }
 
-  redirect(`/operator/students/${studentId}/lessons/${lesson.id}?created=1`);
+  const { error: assignmentError } = await supabase
+    .from("lesson_assignments")
+    .insert({ lesson_id: lesson.id, student_id: studentId });
+
+  if (assignmentError) {
+    console.error(assignmentError);
+    const { error: cleanupError } = await supabase
+      .from("lessons")
+      .delete()
+      .eq("id", lesson.id);
+    if (cleanupError) console.error(cleanupError);
+    return { fieldErrors: {}, formError: GENERIC_ERROR, values };
+  }
+
+  redirect(`/operator/schedules/${lesson.id}?created=1`);
 }

@@ -1,19 +1,7 @@
-import { AuthenticatedPlaceholder } from "@/components/auth/authenticated-placeholder";
-import { getAuthNoticeMessage } from "@/lib/auth/errors";
+import { redirect } from "next/navigation";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 
-type OperatorPageProps = {
-  searchParams: Promise<{ notice?: string }>;
-};
-
-export default async function OperatorPage({ searchParams }: OperatorPageProps) {
+export default async function OperatorPage() {
   await requireAuthenticatedUser("/login/operator", "operator");
-  const { notice } = await searchParams;
-  return (
-    <AuthenticatedPlaceholder
-      role="operator"
-      notice={getAuthNoticeMessage(notice)}
-      featureLink={{ href: "/operator/students", label: "학생 관리" }}
-    />
-  );
+  redirect("/operator/schedules");
 }
