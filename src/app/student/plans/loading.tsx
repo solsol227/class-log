@@ -1,3 +1,3 @@
 export default function StudentPlansLoading() {
-  return <p className="p-6">월간 계획을 불러오는 중입니다.</p>;
+  return <p className="p-6">내 일정으로 이동하는 중입니다.</p>;
 }

@@ -12,7 +12,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type StudentCreateFieldErrors = {
   nickname?: string;
-  displayName?: string;
   password?: string;
   passwordConfirmation?: string;
 };
@@ -22,12 +21,11 @@ export type StudentCreateActionState = {
   formError?: string;
   values?: {
     nickname: string;
-    displayName: string;
   };
 };
 
 const GENERIC_ERROR = "학생을 등록하지 못했습니다. 잠시 후 다시 시도해 주세요.";
-const DUPLICATE_NICKNAME_ERROR = "이미 사용 중인 닉네임입니다.";
+const DUPLICATE_NICKNAME_ERROR = "이미 사용 중인 이름입니다.";
 
 function isDuplicateAuthUserError(error: { code?: string }) {
   return error.code === "email_exists" || error.code === "user_already_exists";
@@ -40,12 +38,10 @@ export async function createStudent(
   await requireAuthenticatedUser("/login/operator", "operator");
 
   const rawNickname = String(formData.get("nickname") ?? "");
-  const rawDisplayName = String(formData.get("display_name") ?? "");
   const password = String(formData.get("password") ?? "");
   const passwordConfirmation = String(
     formData.get("password_confirmation") ?? "",
   );
-  const displayName = rawDisplayName.trim() || null;
   const fieldErrors: StudentCreateFieldErrors = {};
   let nickname = "";
   let email = "";
@@ -57,7 +53,7 @@ export async function createStudent(
     fieldErrors.nickname =
       error instanceof InvalidStudentNicknameError
         ? error.message
-        : "닉네임을 확인해 주세요.";
+        : "이름을 확인해 주세요.";
   }
 
   if (!password) {
@@ -74,7 +70,6 @@ export async function createStudent(
 
   const values = {
     nickname: rawNickname,
-    displayName: rawDisplayName,
   };
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -131,7 +126,7 @@ export async function createStudent(
     .insert({
       auth_user_id: authData.user.id,
       nickname,
-      display_name: displayName,
+      display_name: nickname,
     })
     .select("id")
     .single();

@@ -33,7 +33,7 @@ export function StudentEmailGenerator() {
     <form className="space-y-4" onSubmit={handleSubmit}>
       <div>
         <label htmlFor="nickname" className="mb-2 block text-sm font-bold">
-          테스트 학생 닉네임
+          테스트 학생 이름
         </label>
         <input
           id="nickname"

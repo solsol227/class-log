@@ -28,7 +28,7 @@ type FieldErrors = {
 };
 
 type RoleCheckResponse = {
-  destination: "/operator" | "/student";
+  destination: "/operator/schedules" | "/student/schedule";
 };
 
 const loginConfig = {
@@ -42,11 +42,11 @@ const loginConfig = {
     buttonLabel: "운영자로 로그인",
   },
   student: {
-    identifierLabel: "닉네임",
+    identifierLabel: "이름",
     identifierName: "nickname",
     identifierType: "text",
-    identifierPlaceholder: "닉네임을 입력하세요",
-    identifierRequiredMessage: "닉네임을 입력해 주세요.",
+    identifierPlaceholder: "이름을 입력하세요",
+    identifierRequiredMessage: "이름을 입력해 주세요.",
     autoComplete: "username",
     buttonLabel: "학생으로 로그인",
   },
@@ -70,7 +70,7 @@ function isRoleCheckResponse(value: unknown): value is RoleCheckResponse {
   }
 
   const destination = (value as RoleCheckResponse).destination;
-  return destination === "/operator" || destination === "/student";
+  return destination === "/operator/schedules" || destination === "/student/schedule";
 }
 
 export function PasswordLoginForm({
