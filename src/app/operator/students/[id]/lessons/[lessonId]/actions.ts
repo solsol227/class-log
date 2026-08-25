@@ -6,7 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ATTENDANCE_STATUSES = ["present", "late", "absent", "excused"] as const;
+const ATTENDANCE_STATUSES = ["present", "absent", "excused"] as const;
 const MEMO_MAX_LENGTH = 1000;
 const GENERIC_ERROR =
   "출결을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -84,6 +84,7 @@ export async function saveAttendance(
     .select("lesson_id")
     .eq("lesson_id", lessonId)
     .eq("student_id", studentId)
+    .is("unassigned_at", null)
     .maybeSingle();
 
   if (assignmentError || !assignment) {

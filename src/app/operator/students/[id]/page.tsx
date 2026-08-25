@@ -54,7 +54,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   }
 
   const [{ data: assignments, error: assignmentError }, { data: allLessons, error: lessonsError }] = await Promise.all([
-    supabase.from("lesson_assignments").select("lesson_id").eq("student_id", id),
+    supabase.from("lesson_assignments").select("lesson_id").eq("student_id", id).is("unassigned_at", null),
     supabase.from("lessons").select("id, title, starts_at, ends_at, status").order("starts_at", { ascending: true }),
   ]);
   const assignedLessonIds = new Set(assignments?.map((assignment) => assignment.lesson_id) ?? []);
@@ -91,7 +91,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-2xl font-bold">배정된 일정</h2>
-          {!lessonsError && allLessons && allLessons.length > 0 ? <ScheduleAssignmentPicker studentId={id} schedules={allLessons.filter((lesson) => lesson.status !== "cancelled").map((lesson) => ({ value: lesson.id, label: lesson.title, detail: formatDateTime(lesson.starts_at), disabled: assignedLessonIds.has(lesson.id) || lesson.status !== "scheduled", disabledLabel: assignedLessonIds.has(lesson.id) ? "배정됨" : "완료" }))} /> : null}
+          {!lessonsError && allLessons && allLessons.length > 0 ? <ScheduleAssignmentPicker studentId={id} schedules={allLessons.filter((lesson) => lesson.status !== "cancelled").map((lesson) => ({ value: lesson.id, label: lesson.title, detail: formatDateTime(lesson.starts_at), disabled: assignedLessonIds.has(lesson.id), disabledLabel: "배정됨" }))} /> : null}
         </div>
         {assignmentError || lessonsError ? (
           <p role="alert" className="mt-5 text-[var(--muted)]">배정된 일정을 불러오지 못했습니다.</p>

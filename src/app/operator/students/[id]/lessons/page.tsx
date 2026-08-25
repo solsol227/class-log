@@ -74,6 +74,7 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
     .from("lesson_assignments")
     .select("lesson_id")
     .eq("student_id", studentId)
+    .is("unassigned_at", null)
     .order("assigned_at", { ascending: true });
 
   const lessonIds = assignments?.map((assignment) => assignment.lesson_id) ?? [];
@@ -141,7 +142,7 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
                   </span>
                 </span>
                 <span className="mt-3 block text-sm text-[var(--muted)]">
-                  {formatDateTime(lesson.starts_at)} – {formatDateTime(lesson.ends_at)}
+                  {formatDateTime(lesson.starts_at)} - {formatDateTime(lesson.ends_at)}
                 </span>
               </Link>
             </li>

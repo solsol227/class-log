@@ -20,7 +20,6 @@ const STATUS_LABELS: Record<string, string> = {
 
 const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: "출석",
-  late: "지각",
   absent: "결석",
   excused: "사유결석",
 };
@@ -91,6 +90,7 @@ export default async function LessonDetailPage({
         .select("lesson_id")
         .eq("lesson_id", lessonId)
         .eq("student_id", studentId)
+        .is("unassigned_at", null)
         .maybeSingle(),
     ]);
 

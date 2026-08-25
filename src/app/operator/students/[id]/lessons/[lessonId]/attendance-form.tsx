@@ -13,7 +13,6 @@ const ATTENDANCE_OPTIONS: Array<{
   label: string;
 }> = [
   { value: "present", label: "출석" },
-  { value: "late", label: "지각" },
   { value: "absent", label: "결석" },
   { value: "excused", label: "사유결석" },
 ];
@@ -71,7 +70,7 @@ export function AttendanceForm({
 
       <fieldset>
         <legend className="text-sm font-bold">출결 상태</legend>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {ATTENDANCE_OPTIONS.map((option) => (
             <label
               key={option.value}
