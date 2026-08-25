@@ -3,26 +3,47 @@
 import { useActionState, useLayoutEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { createSchedule, updateSchedule, type ScheduleActionState } from "./actions";
+import { ScheduleDateTimeFields, type ScheduleDateTimeFieldsHandle } from "./schedule-date-time-fields";
+import { StudentMultiSelectField, type StudentSelectOption } from "./student-multi-select-field";
 
 const INITIAL_STATE: ScheduleActionState = { fieldErrors: {} };
-type ScheduleValues = { title: string; startsAt: string; endsAt: string; location: string; notes: string };
+type ScheduleValues = {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  notes: string;
+  studentIds?: string[];
+};
 
-function SubmitButton({ mode }: { mode: "create" | "edit" }) {
+function FormActions({ mode, onCancel }: { mode: "create" | "edit"; onCancel?: () => void }) {
   const { pending } = useFormStatus();
-  return <button type="submit" disabled={pending} className="min-h-12 w-full rounded-xl bg-[var(--accent)] px-5 font-bold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-wait disabled:opacity-70">{pending ? "저장하는 중입니다..." : mode === "create" ? "일정 등록" : "일정 수정"}</button>;
-}
 
-export function ScheduleForm({ mode, lessonId, initialValues }: { mode: "create" | "edit"; lessonId?: string; initialValues?: ScheduleValues }) {
-  const action = mode === "edit" && lessonId ? updateSchedule.bind(null, lessonId) : createSchedule;
-  const [state, formAction] = useActionState(action, INITIAL_STATE);
-  const values = state.values ?? initialValues;
+  if (mode === "create") {
+    return <button type="submit" disabled={pending} className="min-h-12 w-full rounded-xl bg-[var(--accent)] px-5 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px disabled:cursor-wait disabled:opacity-70">{pending ? "등록하는 중입니다..." : "일정 등록"}</button>;
+  }
 
   return (
-    <form action={formAction} className="space-y-5" noValidate>
+    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+      <button type="button" disabled={pending} onClick={onCancel} className="min-h-12 rounded-xl border border-[#9badaa] px-5 font-bold text-[var(--foreground)] transition hover:bg-[#f4f8f7] active:translate-y-px disabled:opacity-60">취소</button>
+      <button type="submit" disabled={pending} className="min-h-12 rounded-xl bg-[var(--accent)] px-6 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px disabled:cursor-wait disabled:opacity-70">{pending ? "저장하는 중입니다..." : "저장"}</button>
+    </div>
+  );
+}
+
+export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel }: { mode: "create" | "edit"; lessonId?: string; initialValues?: ScheduleValues; students?: StudentSelectOption[]; onCancel?: () => void }) {
+  const action = mode === "edit" && lessonId ? updateSchedule.bind(null, lessonId) : createSchedule;
+  const [state, formAction] = useActionState(action, INITIAL_STATE);
+  const dateTimeFieldsRef = useRef<ScheduleDateTimeFieldsHandle>(null);
+  const values = state.values ?? initialValues;
+  const dateTimeKey = `${values?.date ?? ""}|${values?.startTime ?? ""}|${values?.endTime ?? ""}`;
+
+  return (
+    <form action={formAction} onSubmit={(event) => { if (dateTimeFieldsRef.current && !dateTimeFieldsRef.current.validate()) event.preventDefault(); }} className="space-y-5" noValidate>
       {state.formError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{state.formError}</p> : null}
       <FormInput id="schedule-title" label="제목" name="title" defaultValue={values?.title} error={state.fieldErrors.title} />
-      <FormInput id="schedule-starts-at" label="시작 일시" name="starts_at" type="datetime-local" defaultValue={values?.startsAt} error={state.fieldErrors.startsAt} />
-      <FormInput id="schedule-ends-at" label="종료 일시" name="ends_at" type="datetime-local" defaultValue={values?.endsAt} error={state.fieldErrors.endsAt} />
+      <ScheduleDateTimeFields ref={dateTimeFieldsRef} key={dateTimeKey} initialDate={values?.date} initialStartTime={values?.startTime} initialEndTime={values?.endTime} dateError={state.fieldErrors.date} startError={state.fieldErrors.startsAt} endError={state.fieldErrors.endsAt} />
       <div>
         <label htmlFor="schedule-location" className="mb-2 block text-sm font-bold">장소 선택 (선택)</label>
         <input id="schedule-location" name="location" list="schedule-location-options" defaultValue={values?.location} placeholder="장소를 선택하거나 직접 입력하세요" className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4 text-base outline-none focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4]" />
@@ -32,7 +53,8 @@ export function ScheduleForm({ mode, lessonId, initialValues }: { mode: "create"
         <label htmlFor="schedule-notes" className="mb-2 block text-sm font-bold">메모 (선택)</label>
         <AutoResizeTextarea id="schedule-notes" name="notes" defaultValue={values?.notes} />
       </div>
-      <SubmitButton mode={mode} />
+      {students ? <StudentMultiSelectField key={(values?.studentIds ?? []).join(",")} students={students} initialSelectedIds={values?.studentIds} error={state.fieldErrors.students} /> : null}
+      <FormActions mode={mode} onCancel={onCancel} />
     </form>
   );
 }
@@ -49,25 +71,15 @@ function AutoResizeTextarea({ id, name, defaultValue }: { id: string; name: stri
 
   useLayoutEffect(resize, [defaultValue]);
 
-  return (
-    <textarea
-      ref={ref}
-      id={id}
-      name={name}
-      rows={1}
-      defaultValue={defaultValue}
-      onInput={resize}
-      className="min-h-13 w-full resize-none overflow-hidden rounded-xl border border-[#9badaa] bg-white px-4 py-3 text-base leading-7 outline-none focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4]"
-    />
-  );
+  return <textarea ref={ref} id={id} name={name} rows={1} defaultValue={defaultValue} onInput={resize} className="min-h-13 w-full resize-none overflow-hidden rounded-xl border border-[#9badaa] bg-white px-4 py-3 text-base leading-7 outline-none focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4]" />;
 }
 
-function FormInput({ id, label, name, type = "text", defaultValue, error }: { id: string; label: string; name: string; type?: "text" | "datetime-local"; defaultValue?: string; error?: string }) {
+function FormInput({ id, label, name, defaultValue, error }: { id: string; label: string; name: string; defaultValue?: string; error?: string }) {
   const errorId = `${id}-error`;
   return (
     <div>
       <label htmlFor={id} className="mb-2 block text-sm font-bold">{label}</label>
-      <input id={id} name={name} type={type} step={type === "datetime-local" ? 60 : undefined} defaultValue={defaultValue} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4 text-base outline-none focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4] aria-invalid:border-rose-600" />
+      <input id={id} name={name} defaultValue={defaultValue} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4 text-base outline-none focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4] aria-invalid:border-rose-600" />
       {error ? <p id={errorId} className="mt-2 text-sm font-semibold text-rose-800">{error}</p> : null}
     </div>
   );

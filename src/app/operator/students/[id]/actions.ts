@@ -62,13 +62,13 @@ export async function assignScheduleToStudent(
     if (lessonError) console.error(lessonError);
     return { formError: "학생 또는 일정 정보를 확인하지 못했습니다." };
   }
-  if (lesson.status !== "scheduled") {
-    return { formError: "예정 상태의 일정만 새로 배정할 수 있습니다." };
+  if (lesson.status === "cancelled") {
+    return { formError: "취소된 일정에는 학생을 배정할 수 없습니다." };
   }
 
   const { error } = await supabase.from("lesson_assignments").upsert(
-    { lesson_id: lessonId, student_id: studentId },
-    { onConflict: "lesson_id,student_id", ignoreDuplicates: true },
+    { lesson_id: lessonId, student_id: studentId, unassigned_at: null },
+    { onConflict: "lesson_id,student_id" },
   );
   if (error) {
     console.error(error);

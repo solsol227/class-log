@@ -47,7 +47,8 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
   const supabase = await createSupabaseServerClient();
   const { data: assignments, error: assignmentError } = await supabase
     .from("lesson_assignments")
-    .select("lesson_id");
+    .select("lesson_id")
+    .is("unassigned_at", null);
 
   if (assignmentError) {
     throw new Error("배정된 일정을 불러오지 못했습니다.", { cause: assignmentError });
