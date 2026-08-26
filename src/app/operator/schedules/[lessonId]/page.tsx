@@ -32,7 +32,7 @@ function ScheduleUnavailable() {
   return <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl items-center px-5 py-12 sm:px-8"><section className="w-full rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8"><h1 className="text-3xl font-bold">일정을 찾을 수 없습니다.</h1><Link href="/operator/schedules" className="mt-8 inline-flex min-h-12 items-center rounded-xl bg-[var(--accent)] px-5 font-bold text-white">일정 목록</Link></section></main>;
 }
 
-export default async function ScheduleDetailPage({ params, searchParams }: { params: Promise<{ lessonId: string }>; searchParams: Promise<{ created?: string; updated?: string; assigned?: string; unassigned?: string; attendanceSaved?: string }> }) {
+export default async function ScheduleDetailPage({ params, searchParams }: { params: Promise<{ lessonId: string }>; searchParams: Promise<{ created?: string; updated?: string; assigned?: string; unassigned?: string; attendanceSaved?: string; staffError?: string; feedbackError?: string }> }) {
   await requireAuthenticatedUser("/login/operator", "operator");
   const { lessonId } = await params;
   const notices = await searchParams;
@@ -79,7 +79,14 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
           : notices.attendanceSaved === "1"
             ? "출결을 저장했습니다."
             : null;
-  const attendanceBlockedReason = lesson.status === "cancelled"
+  const errorNotice = notices.staffError === "1"
+    ? "담당 직원 정보를 저장하지 못했습니다. 선택 항목을 확인해 주세요."
+    : notices.feedbackError === "1"
+      ? "피드백 정보를 처리하지 못했습니다. 대상과 입력 내용을 확인해 주세요."
+      : null;
+  const attendanceBlockedReason = lesson.status === "draft"
+    ? "Draft 일정에는 출결을 저장할 수 없습니다. 일정을 먼저 확정해 주세요."
+    : lesson.status === "cancelled"
     ? "취소된 일정에는 출결을 저장할 수 없습니다."
     : hasNotStarted(lesson.starts_at)
       ? "아직 시작하지 않은 일정에는 출결을 저장할 수 없습니다."
@@ -91,6 +98,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
     <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
       <Link href="/operator/schedules" className="font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">일정 목록</Link>
       {notice ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">{notice}</p> : null}
+      {errorNotice ? <p role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-bold text-rose-900">{errorNotice}</p> : null}
       <ScheduleDashboard
         lesson={{
           id: lesson.id,

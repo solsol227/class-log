@@ -76,11 +76,11 @@ export async function assignScheduleToStudent(
 
   const { data: program, error: programError } = await supabase.from("student_programs").select("id").eq("student_id", studentId).eq("program_type", lesson.program_type).eq("status", "active").maybeSingle();
   if (programError || !program) return { formError: "학생이 해당 프로그램을 이용 중이 아닙니다." };
-  const { error } = await supabase.from("lesson_assignments").upsert(
+  const { data: assignment, error } = await supabase.from("lesson_assignments").upsert(
     { lesson_id: lessonId, student_id: studentId, student_program_id: program.id, unassigned_at: null },
     { onConflict: "lesson_id,student_id" },
-  );
-  if (error) {
+  ).select("lesson_id").maybeSingle();
+  if (error || !assignment) {
     console.error(error);
     return { formError: "일정을 배정하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
@@ -255,8 +255,8 @@ export async function addStudentProgram(
     return { formError: "프로그램과 시작일을 확인해 주세요." };
   }
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("student_programs").insert({ student_id: studentId, program_type: programType, started_at: startedAt });
-  if (error) return { formError: error.code === "23505" ? "이미 이용 중인 프로그램입니다." : "프로그램을 추가하지 못했습니다." };
+  const { data, error } = await supabase.from("student_programs").insert({ student_id: studentId, program_type: programType, started_at: startedAt }).select("id").maybeSingle();
+  if (error || !data) return { formError: error?.code === "23505" ? "이미 이용 중인 프로그램입니다." : "프로그램을 추가하지 못했습니다." };
   revalidatePath(`/operator/students/${studentId}`);
   redirect(`/operator/students/${studentId}?programUpdated=1`);
 }

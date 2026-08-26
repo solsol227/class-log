@@ -237,11 +237,11 @@ export async function saveRosterAttendance(
     return { formError: "일정 시작 시각 이후에 출결을 기록할 수 있습니다." };
   }
 
-  const { error: attendanceError } = await supabase.from("attendance_records").upsert(
+  const { data: savedAttendance, error: attendanceError } = await supabase.from("attendance_records").upsert(
     studentIds.map((studentId) => ({ lesson_id: lessonId, student_id: studentId, status: selected.get(studentId)! })),
     { onConflict: "lesson_id,student_id" },
-  );
-  if (attendanceError) {
+  ).select("student_id");
+  if (attendanceError || savedAttendance.length !== studentIds.length) {
     console.error(attendanceError);
     return { formError: "출결을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
@@ -303,8 +303,8 @@ export async function confirmDraftSchedule(lessonId: string, _previousState: Man
   await requireAuthenticatedUser("/login/operator", "operator");
   if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc("confirm_draft_lesson", { target_lesson_id: lessonId });
-  if (error) return { formError: error.code === "23P01" ? "학생의 다른 일정과 시간이 겹쳐 확정할 수 없습니다." : "Draft 일정을 확정하지 못했습니다." };
+  const { data, error } = await supabase.rpc("confirm_draft_lesson", { target_lesson_id: lessonId });
+  if (error || !data) return { formError: error?.code === "23P01" ? "학생의 다른 일정과 시간이 겹쳐 확정할 수 없습니다." : "Draft 일정을 확정하지 못했습니다." };
   revalidatePath("/operator/schedules");
   revalidatePath(`/operator/schedules/${lessonId}`);
   redirect(`/operator/schedules/${lessonId}?updated=1`);
@@ -312,16 +312,11 @@ export async function confirmDraftSchedule(lessonId: string, _previousState: Man
 
 export async function updateLessonStaff(lessonId: string, formData: FormData) {
   await requireAuthenticatedUser("/login/operator", "operator");
-  const staffIds = [...new Set(formData.getAll("staff_ids").map(String).filter((id) => UUID_PATTERN.test(id)))];
+  const staffIds = [...new Set(formData.getAll("staff_ids").map(String))];
+  if (!UUID_PATTERN.test(lessonId) || staffIds.some((id) => !UUID_PATTERN.test(id))) redirect(`/operator/schedules/${lessonId}?staffError=1`);
   const supabase = await createSupabaseServerClient();
-  const { data: staff, error: staffError } = staffIds.length ? await supabase.from("staff_profiles").select("id, role").in("id", staffIds).eq("is_active", true) : { data: [], error: null };
-  if (staffError || staff.length !== staffIds.length) redirect(`/operator/schedules/${lessonId}?staffError=1`);
-  const { error: deleteError } = await supabase.from("lesson_staff").delete().eq("lesson_id", lessonId);
-  if (deleteError) redirect(`/operator/schedules/${lessonId}?staffError=1`);
-  if (staff.length) {
-    const { error } = await supabase.from("lesson_staff").insert(staff.map((member) => ({ lesson_id: lessonId, staff_id: member.id, role: member.role })));
-    if (error) redirect(`/operator/schedules/${lessonId}?staffError=1`);
-  }
+  const { data, error } = await supabase.rpc("replace_lesson_staff", { target_lesson_id: lessonId, selected_staff_ids: staffIds });
+  if (error || !data) redirect(`/operator/schedules/${lessonId}?staffError=1`);
   revalidatePath(`/operator/schedules/${lessonId}`);
   redirect(`/operator/schedules/${lessonId}?staffUpdated=1`);
 }
