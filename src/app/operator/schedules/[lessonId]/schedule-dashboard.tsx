@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ScheduleForm } from "../schedule-form";
 import type { StudentSelectOption } from "../student-multi-select-field";
 import type { AttendanceStatus } from "../actions";
-import { DeleteScheduleForm } from "./schedule-management-forms";
+import { ConfirmDraftForm, DeleteScheduleForm } from "./schedule-management-forms";
 import { RosterAttendanceForm } from "./roster-attendance-form";
 
 type Lesson = {
@@ -19,6 +19,7 @@ type Lesson = {
   notes: string | null;
   status: string;
   statusLabel: string;
+  programType: string;
 };
 
 type AssignedStudent = { id: string; name: string; attendanceStatus: AttendanceStatus | null };
@@ -38,6 +39,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
           <h1 className="mt-4 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">{lesson.title}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {lesson.status === "draft" ? <ConfirmDraftForm lessonId={lesson.id} /> : null}
           {canEdit && !editing ? <button type="button" onClick={() => setEditing(true)} className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] active:translate-y-px">수정</button> : null}
           <DeleteScheduleForm lessonId={lesson.id} />
         </div>
@@ -47,7 +49,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
         <div className="mt-8 border-t border-[var(--line)] pt-7">
           <h2 className="text-2xl font-bold">일정 수정</h2>
           {lesson.status === "completed" ? <p className="mt-3 text-sm text-[var(--muted)]">완료된 일정도 정보와 학생 배정을 수정할 수 있습니다.</p> : null}
-          <div className="mt-5"><ScheduleForm mode="edit" lessonId={lesson.id} initialValues={{ title: lesson.title, date: lesson.dateInput, startTime: lesson.startTimeInput, endTime: lesson.endTimeInput, location: lesson.location ?? "", notes: lesson.notes ?? "", studentIds: assignedStudents.map((student) => student.id) }} students={studentOptions} onCancel={() => setEditing(false)} /></div>
+          <div className="mt-5"><ScheduleForm mode="edit" lessonId={lesson.id} initialValues={{ title: lesson.title, date: lesson.dateInput, startTime: lesson.startTimeInput, endTime: lesson.endTimeInput, location: lesson.location ?? "", notes: lesson.notes ?? "", studentIds: assignedStudents.map((student) => student.id), programType: lesson.programType, status: lesson.status }} students={studentOptions} onCancel={() => setEditing(false)} /></div>
         </div>
       ) : (
         <>
@@ -55,6 +57,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
             <div><dt className="text-sm font-bold text-[var(--muted)]">날짜</dt><dd className="mt-1 text-lg">{lesson.dateLabel}</dd></div>
             <div><dt className="text-sm font-bold text-[var(--muted)]">시간</dt><dd className="mt-1 text-lg">{lesson.timeLabel}</dd></div>
             <div><dt className="text-sm font-bold text-[var(--muted)]">장소</dt><dd className="mt-1 text-lg">{lesson.location || "등록된 장소가 없습니다."}</dd></div>
+            <div><dt className="text-sm font-bold text-[var(--muted)]">프로그램</dt><dd className="mt-1 text-lg">{({ weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험" } as Record<string, string>)[lesson.programType] ?? lesson.programType}</dd></div>
             <div className="sm:col-span-2"><dt className="text-sm font-bold text-[var(--muted)]">메모</dt><dd className="mt-1 whitespace-pre-wrap leading-7">{lesson.notes || "등록된 메모가 없습니다."}</dd></div>
           </dl>
           <div className="mt-8 border-t border-[var(--line)] pt-7">
