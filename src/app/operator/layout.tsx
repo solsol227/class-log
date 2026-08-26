@@ -13,6 +13,8 @@ export default async function OperatorLayout({ children }: { children: ReactNode
           <div className="flex items-center gap-1 sm:gap-2">
             <Link href="/operator/schedules" className="rounded-xl px-3 py-2 font-bold text-[var(--foreground)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] sm:px-4">일정관리</Link>
             <Link href="/operator/students" className="rounded-xl px-3 py-2 font-bold text-[var(--foreground)] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] sm:px-4">학생관리</Link>
+            <Link href="/operator/staff" className="rounded-xl px-3 py-2 font-bold text-[var(--foreground)] transition hover:bg-white sm:px-4">직원관리</Link>
+            <Link href="/operator/makeup" className="rounded-xl px-3 py-2 font-bold text-[var(--foreground)] transition hover:bg-white sm:px-4">보강관리</Link>
           </div>
           <LogoutButton compact />
         </nav>
