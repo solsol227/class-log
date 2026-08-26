@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-export type StudentSelectOption = { id: string; name: string };
+export type StudentSelectOption = { id: string; name: string; programTypes?: string[] };
 
 function normalize(value: string) {
   return value.toLocaleLowerCase("ko-KR").replace(/\s+/g, "");
