@@ -32,7 +32,7 @@ function ScheduleUnavailable() {
   return <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl items-center px-5 py-12 sm:px-8"><section className="w-full rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8"><h1 className="text-3xl font-bold">일정을 찾을 수 없습니다.</h1><Link href="/operator/schedules" className="mt-8 inline-flex min-h-12 items-center rounded-xl bg-[var(--accent)] px-5 font-bold text-white">일정 목록</Link></section></main>;
 }
 
-export default async function ScheduleDetailPage({ params, searchParams }: { params: Promise<{ lessonId: string }>; searchParams: Promise<{ created?: string; updated?: string; assigned?: string; unassigned?: string; attendanceSaved?: string; staffError?: string; feedbackError?: string }> }) {
+export default async function ScheduleDetailPage({ params, searchParams }: { params: Promise<{ lessonId: string }>; searchParams: Promise<{ created?: string; updated?: string; assigned?: string; unassigned?: string; attendanceSaved?: string; staffUpdated?: string; staffError?: string; feedbackError?: string }> }) {
   await requireAuthenticatedUser("/login/operator", "operator");
   const { lessonId } = await params;
   const notices = await searchParams;
@@ -78,7 +78,9 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
           ? "학생 배정을 해제했습니다."
           : notices.attendanceSaved === "1"
             ? "출결을 저장했습니다."
-            : null;
+            : notices.staffUpdated === "1"
+              ? "담당직원이 저장되었습니다."
+              : null;
   const errorNotice = notices.staffError === "1"
     ? "담당 직원 정보를 저장하지 못했습니다. 선택 항목을 확인해 주세요."
     : notices.feedbackError === "1"

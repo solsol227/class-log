@@ -28,7 +28,11 @@ export async function scheduleMakeup(makeupId: string, formData: FormData) {
     target_replacement_lesson_id: replacementLessonId,
   });
   if (error || !data) redirect(`/operator/makeup?error=${error?.code === "23P01" ? "conflict" : error?.code === "23514" ? "program" : "save"}`);
-  revalidatePath("/operator/makeup"); redirect("/operator/makeup?updated=1");
+  revalidatePath("/operator/makeup");
+  revalidatePath("/operator/schedules");
+  revalidatePath(`/operator/schedules/${replacementLessonId}`);
+  revalidatePath("/student/schedule");
+  redirect("/operator/makeup?updated=1");
 }
 
 export async function completeMakeup(makeupId: string) {
