@@ -6,7 +6,7 @@ import { ScheduleForm } from "../schedule-form";
 export default async function NewSchedulePage() {
   await requireAuthenticatedUser("/login/operator", "operator");
   const supabase = await createSupabaseServerClient();
-  const { data: students, error } = await supabase.from("students").select("id, nickname").order("nickname");
-  if (error) throw new Error("학생 목록을 불러오지 못했습니다.", { cause: error });
-  return <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-14"><Link href="/operator/schedules" className="font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">일정 목록</Link><section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8"><h1 className="text-3xl font-bold tracking-[-0.04em]">새 일정 등록</h1><div className="mt-8"><ScheduleForm mode="create" students={students.map((student) => ({ id: student.id, name: student.nickname }))} /></div></section></main>;
+  const [{ data: students, error }, { data: programs, error: programsError }] = await Promise.all([supabase.from("students").select("id, nickname").order("nickname"), supabase.from("student_programs").select("student_id, program_type").eq("status", "active")]);
+  if (error || programsError) throw new Error("학생 목록을 불러오지 못했습니다.", { cause: error ?? programsError });
+  return <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-14"><Link href="/operator/schedules" className="font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">일정 목록</Link><section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8"><h1 className="text-3xl font-bold tracking-[-0.04em]">새 일정 등록</h1><div className="mt-8"><ScheduleForm mode="create" students={students.map((student) => ({ id: student.id, name: student.nickname, programTypes: programs.filter((program) => program.student_id === student.id).map((program) => program.program_type) }))} /></div></section></main>;
 }

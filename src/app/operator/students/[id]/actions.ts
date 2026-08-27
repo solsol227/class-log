@@ -18,6 +18,8 @@ const PHONE_PATTERN = /^010[0-9]{8}$/;
 type ProfileFieldErrors = {
   name?: string;
   gender?: string;
+  age?: string;
+  acquisitionSource?: string;
   phone?: string;
   joinedMonth?: string;
 };
@@ -34,6 +36,12 @@ export type DeleteStudentActionState = {
 export type StudentAssignmentActionState = {
   formError?: string;
 };
+
+export type StudentProgramActionState = { formError?: string };
+
+const PROGRAM_TYPES = ["weekday_vocal", "weekend_vocal", "rental", "trial"] as const;
+const STOP_REASONS = ["break", "ended", "other"] as const;
+const ACQUISITION_SOURCES = ["instagram", "daangn", "referral", "naver"] as const;
 
 function optionalText(value: FormDataEntryValue | null) {
   return String(value ?? "").trim() || null;
@@ -54,7 +62,7 @@ export async function assignScheduleToStudent(
   const supabase = await createSupabaseServerClient();
   const [{ data: student, error: studentError }, { data: lesson, error: lessonError }] = await Promise.all([
     supabase.from("students").select("id").eq("id", studentId).maybeSingle(),
-    supabase.from("lessons").select("id, status").eq("id", lessonId).maybeSingle(),
+    supabase.from("lessons").select("id, status, program_type").eq("id", lessonId).maybeSingle(),
   ]);
 
   if (studentError || lessonError || !student || !lesson) {
@@ -66,11 +74,13 @@ export async function assignScheduleToStudent(
     return { formError: "취소된 일정에는 학생을 배정할 수 없습니다." };
   }
 
-  const { error } = await supabase.from("lesson_assignments").upsert(
-    { lesson_id: lessonId, student_id: studentId, unassigned_at: null },
+  const { data: program, error: programError } = await supabase.from("student_programs").select("id").eq("student_id", studentId).eq("program_type", lesson.program_type).eq("status", "active").maybeSingle();
+  if (programError || !program) return { formError: "학생이 해당 프로그램을 이용 중이 아닙니다." };
+  const { data: assignment, error } = await supabase.from("lesson_assignments").upsert(
+    { lesson_id: lessonId, student_id: studentId, student_program_id: program.id, unassigned_at: null },
     { onConflict: "lesson_id,student_id" },
-  );
-  if (error) {
+  ).select("lesson_id").maybeSingle();
+  if (error || !assignment) {
     console.error(error);
     return { formError: "일정을 배정하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
@@ -95,10 +105,10 @@ export async function updateStudentProfile(
 
   const rawName = String(formData.get("name") ?? "");
   const genderInput = String(formData.get("gender") ?? "");
-  const age = optionalText(formData.get("age"));
+  const ageInput = String(formData.get("age") ?? "").trim();
+  const age = ageInput ? Number(ageInput) : null;
   const phoneDigits = String(formData.get("phone") ?? "").replace(/\D/g, "");
   const acquisitionSource = optionalText(formData.get("acquisition_source"));
-  const category = optionalText(formData.get("category"));
   const joinedMonthInput = String(formData.get("joined_month") ?? "").trim();
   const specialNotes = optionalText(formData.get("special_notes"));
   let name = "";
@@ -120,6 +130,12 @@ export async function updateStudentProfile(
   const phone = phoneDigits || null;
   if (phone && !PHONE_PATTERN.test(phone)) {
     fieldErrors.phone = "연락처는 010으로 시작하는 휴대전화 번호 11자리로 입력해 주세요.";
+  }
+  if (age !== null && (!Number.isInteger(age) || age < 1 || age > 119)) {
+    fieldErrors.age = "나이는 1~119 사이의 숫자로 입력해 주세요.";
+  }
+  if (acquisitionSource && !ACQUISITION_SOURCES.includes(acquisitionSource as (typeof ACQUISITION_SOURCES)[number])) {
+    fieldErrors.acquisitionSource = "유입경로를 다시 선택해 주세요.";
   }
 
   let joinedMonth: string | null = null;
@@ -197,12 +213,10 @@ export async function updateStudentProfile(
     .from("students")
     .update({
       nickname: name,
-      display_name: name,
       gender,
       age,
       phone,
       acquisition_source: acquisitionSource,
-      category,
       joined_month: joinedMonth,
       special_notes: specialNotes,
     })
@@ -227,6 +241,43 @@ export async function updateStudentProfile(
   revalidatePath(`/operator/students/${studentId}`);
   revalidatePath("/operator/schedules");
   redirect(`/operator/students/${studentId}?updated=1`);
+}
+
+export async function addStudentProgram(
+  studentId: string,
+  _previousState: StudentProgramActionState,
+  formData: FormData,
+): Promise<StudentProgramActionState> {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  const programType = String(formData.get("program_type") ?? "");
+  const startedAt = String(formData.get("started_at") ?? "");
+  if (!UUID_PATTERN.test(studentId) || !PROGRAM_TYPES.includes(programType as (typeof PROGRAM_TYPES)[number]) || !/^\d{4}-\d{2}-\d{2}$/.test(startedAt)) {
+    return { formError: "프로그램과 시작일을 확인해 주세요." };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("student_programs").insert({ student_id: studentId, program_type: programType, started_at: startedAt }).select("id").maybeSingle();
+  if (error || !data) return { formError: error?.code === "23505" ? "이미 이용 중인 프로그램입니다." : "프로그램을 추가하지 못했습니다." };
+  revalidatePath(`/operator/students/${studentId}`);
+  redirect(`/operator/students/${studentId}?programUpdated=1`);
+}
+
+export async function stopStudentProgram(
+  studentId: string,
+  programId: string,
+  _previousState: StudentProgramActionState,
+  formData: FormData,
+): Promise<StudentProgramActionState> {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  const stopReason = String(formData.get("stop_reason") ?? "") || null;
+  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(programId) || (stopReason && !STOP_REASONS.includes(stopReason as (typeof STOP_REASONS)[number]))) {
+    return { formError: "프로그램 정보를 확인해 주세요." };
+  }
+  const endedAt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("student_programs").update({ status: "stopped", stop_reason: stopReason, ended_at: endedAt }).eq("id", programId).eq("student_id", studentId).eq("status", "active").select("id").maybeSingle();
+  if (error || !data) return { formError: error?.code === "23514" ? "미래 일정 배정을 먼저 해제한 뒤 프로그램을 중단해 주세요." : "프로그램을 중단하지 못했습니다." };
+  revalidatePath(`/operator/students/${studentId}`);
+  redirect(`/operator/students/${studentId}?programUpdated=1`);
 }
 
 export async function deleteStudent(

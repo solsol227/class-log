@@ -13,12 +13,19 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const SCHEDULE_ERROR =
   "일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
+function scheduleRpcErrorMessage(code?: string) {
+  if (code === "23P01") return "선택한 학생에게 시간이 겹치는 다른 일정이 있습니다.";
+  if (code === "23514") return "일정 프로그램과 학생의 이용 프로그램을 다시 확인해 주세요.";
+  return SCHEDULE_ERROR;
+}
+
 type ScheduleFieldErrors = {
   title?: string;
   date?: string;
   startsAt?: string;
   endsAt?: string;
   students?: string;
+  program?: string;
 };
 
 export type ScheduleActionState = {
@@ -32,6 +39,8 @@ export type ScheduleActionState = {
     location: string;
     notes: string;
     studentIds: string[];
+    programType: string;
+    status: string;
   };
 };
 
@@ -65,6 +74,8 @@ function readScheduleForm(formData: FormData) {
   const rawLocation = String(formData.get("location") ?? "");
   const rawNotes = String(formData.get("notes") ?? "");
   const rawStudentIds = [...new Set(formData.getAll("student_ids").map(String))];
+  const programType = String(formData.get("program_type") ?? "");
+  const status = String(formData.get("status") ?? "scheduled");
   const studentIds = rawStudentIds.filter((id) => UUID_PATTERN.test(id));
   const startsAt = toKstTimestamp(dateInput, startTimeInput);
   const endsAt = toKstTimestamp(dateInput, endTimeInput);
@@ -83,16 +94,20 @@ function readScheduleForm(formData: FormData) {
   if (studentIds.length !== rawStudentIds.length) {
     fieldErrors.students = "배정할 학생 정보를 다시 선택해 주세요.";
   }
+  if (!["weekday_vocal", "weekend_vocal", "trial"].includes(programType)) fieldErrors.program = "프로그램을 다시 선택해 주세요.";
+  if (!["draft", "scheduled", "completed"].includes(status)) fieldErrors.program = "일정 상태를 확인해 주세요.";
 
   return {
     fieldErrors,
-    values: { title: rawTitle, date: dateInput, startTime: startTimeInput, endTime: endTimeInput, location: rawLocation, notes: rawNotes, studentIds },
+    values: { title: rawTitle, date: dateInput, startTime: startTimeInput, endTime: endTimeInput, location: rawLocation, notes: rawNotes, studentIds, programType, status },
     record: {
       title: rawTitle.trim(),
       starts_at: startsAt,
       ends_at: endsAt,
       location: rawLocation.trim() || null,
       notes: rawNotes.trim() || null,
+      program_type: programType,
+      status,
     },
   };
 }
@@ -108,43 +123,19 @@ export async function createSchedule(
   }
 
   const supabase = await createSupabaseServerClient();
-  if (parsed.values.studentIds.length > 0) {
-    const { data: students, error: studentsError } = await supabase
-      .from("students")
-      .select("id")
-      .in("id", parsed.values.studentIds);
-    if (studentsError || students.length !== parsed.values.studentIds.length) {
-      if (studentsError) console.error(studentsError);
-      return { fieldErrors: { students: "배정할 학생 정보를 확인하지 못했습니다." }, values: parsed.values };
-    }
-  }
+  const { data: lessonId, error } = await supabase.rpc("save_lesson_with_assignments", {
+    lesson_id: null, lesson_title: parsed.record.title, lesson_starts_at: parsed.record.starts_at,
+    lesson_ends_at: parsed.record.ends_at, lesson_location: parsed.record.location ?? "", lesson_notes: parsed.record.notes ?? "",
+    lesson_program_type: parsed.record.program_type, lesson_status: parsed.record.status, selected_student_ids: parsed.values.studentIds,
+  });
 
-  const { data: lesson, error } = await supabase
-    .from("lessons")
-    .insert(parsed.record)
-    .select("id")
-    .single();
-
-  if (error || !lesson) {
+  if (error || !lessonId) {
     if (error) console.error(error);
-    return { fieldErrors: {}, formError: SCHEDULE_ERROR, values: parsed.values };
-  }
-
-  if (parsed.values.studentIds.length > 0) {
-    const { error: assignmentError } = await supabase.from("lesson_assignments").upsert(
-      parsed.values.studentIds.map((studentId) => ({ lesson_id: lesson.id, student_id: studentId, unassigned_at: null })),
-      { onConflict: "lesson_id,student_id" },
-    );
-    if (assignmentError) {
-      console.error(assignmentError);
-      const { error: cleanupError } = await supabase.from("lessons").delete().eq("id", lesson.id);
-      if (cleanupError) console.error("일정 생성 보상 삭제에 실패했습니다.", cleanupError);
-      return { fieldErrors: {}, formError: cleanupError ? "일정은 생성되었지만 학생 배정에 실패했습니다. 일정 목록에서 상태를 확인해 주세요." : "학생 배정에 실패해 일정을 등록하지 않았습니다. 다시 시도해 주세요.", values: parsed.values };
-    }
+    return { fieldErrors: {}, formError: scheduleRpcErrorMessage(error?.code), values: parsed.values };
   }
 
   revalidatePath("/operator/schedules");
-  redirect(`/operator/schedules/${lesson.id}?created=1`);
+  redirect(`/operator/schedules/${lessonId}?created=1`);
 }
 
 export async function updateSchedule(
@@ -161,76 +152,31 @@ export async function updateSchedule(
   }
 
   const supabase = await createSupabaseServerClient();
-  const [{ data: lesson, error: lookupError }, { data: currentAssignments, error: assignmentsError }] = await Promise.all([
-    supabase.from("lessons").select("id, status").eq("id", lessonId).maybeSingle(),
-    supabase.from("lesson_assignments").select("student_id, unassigned_at").eq("lesson_id", lessonId),
-  ]);
+  const { data: lesson, error: lookupError } = await supabase.from("lessons").select("id, status").eq("id", lessonId).maybeSingle();
 
-  if (lookupError || assignmentsError || !lesson) {
+  if (lookupError || !lesson) {
     if (lookupError) console.error(lookupError);
-    if (assignmentsError) console.error(assignmentsError);
     return { fieldErrors: {}, formError: "일정과 배정 정보를 확인하지 못했습니다." };
   }
   if (lesson.status === "cancelled") {
     return { fieldErrors: {}, formError: "취소된 일정은 수정할 수 없습니다.", values: parsed.values };
   }
 
-  if (parsed.values.studentIds.length > 0) {
-    const { data: students, error: studentsError } = await supabase
-      .from("students")
-      .select("id")
-      .in("id", parsed.values.studentIds);
-    if (studentsError || students.length !== parsed.values.studentIds.length) {
-      if (studentsError) console.error(studentsError);
-      return { fieldErrors: { students: "배정할 학생 정보를 확인하지 못했습니다." }, values: parsed.values };
-    }
-  }
-
-  const { data: updated, error } = await supabase
-    .from("lessons")
-    .update(parsed.record)
-    .eq("id", lessonId)
-    .neq("status", "cancelled")
-    .select("id")
-    .maybeSingle();
+  const { data: updated, error } = await supabase.rpc("save_lesson_with_assignments", {
+    lesson_id: lessonId, lesson_title: parsed.record.title, lesson_starts_at: parsed.record.starts_at,
+    lesson_ends_at: parsed.record.ends_at, lesson_location: parsed.record.location ?? "", lesson_notes: parsed.record.notes ?? "",
+    lesson_program_type: parsed.record.program_type, lesson_status: lesson.status === "completed" ? "completed" : parsed.record.status,
+    selected_student_ids: parsed.values.studentIds,
+  });
 
   if (error || !updated) {
     if (error) console.error(error);
-    return { fieldErrors: {}, formError: SCHEDULE_ERROR, values: parsed.values };
-  }
-
-  const selectedIds = new Set(parsed.values.studentIds);
-  const removedIds = currentAssignments
-    .filter((assignment) => assignment.unassigned_at === null && !selectedIds.has(assignment.student_id))
-    .map((assignment) => assignment.student_id);
-
-  if (parsed.values.studentIds.length > 0) {
-    const { error: assignmentError } = await supabase.from("lesson_assignments").upsert(
-      parsed.values.studentIds.map((studentId) => ({ lesson_id: lessonId, student_id: studentId, unassigned_at: null })),
-      { onConflict: "lesson_id,student_id" },
-    );
-    if (assignmentError) {
-      console.error(assignmentError);
-      return { fieldErrors: {}, formError: "일정 정보는 저장했지만 학생 배정을 저장하지 못했습니다. 화면을 새로고침해 확인해 주세요.", values: parsed.values };
-    }
-  }
-
-  if (removedIds.length > 0) {
-    const { error: unassignError } = await supabase
-      .from("lesson_assignments")
-      .update({ unassigned_at: new Date().toISOString() })
-      .eq("lesson_id", lessonId)
-      .in("student_id", removedIds)
-      .is("unassigned_at", null);
-    if (unassignError) {
-      console.error(unassignError);
-      return { fieldErrors: {}, formError: "일정 정보는 저장했지만 일부 학생 배정을 해제하지 못했습니다. 화면을 새로고침해 확인해 주세요.", values: parsed.values };
-    }
+    return { fieldErrors: {}, formError: scheduleRpcErrorMessage(error?.code), values: parsed.values };
   }
 
   revalidatePath("/operator/schedules");
   revalidatePath(`/operator/schedules/${lessonId}`);
-  for (const studentId of new Set([...parsed.values.studentIds, ...removedIds])) {
+  for (const studentId of new Set(parsed.values.studentIds)) {
     revalidatePath(`/operator/students/${studentId}`);
     revalidatePath(`/operator/students/${studentId}/lessons`);
   }
@@ -278,6 +224,9 @@ export async function saveRosterAttendance(
     if (assignmentError) console.error(assignmentError);
     return { formError: "배정된 학생 정보를 확인하지 못해 출결을 저장하지 않았습니다." };
   }
+  if (lesson.status === "draft") {
+    return { formError: "Draft 일정에는 출결을 기록할 수 없습니다. 일정을 먼저 확정해 주세요." };
+  }
   if (lesson.status === "cancelled") {
     return { formError: "취소된 일정에는 출결을 기록할 수 없습니다." };
   }
@@ -288,11 +237,11 @@ export async function saveRosterAttendance(
     return { formError: "일정 시작 시각 이후에 출결을 기록할 수 있습니다." };
   }
 
-  const { error: attendanceError } = await supabase.from("attendance_records").upsert(
+  const { data: savedAttendance, error: attendanceError } = await supabase.from("attendance_records").upsert(
     studentIds.map((studentId) => ({ lesson_id: lessonId, student_id: studentId, status: selected.get(studentId)! })),
     { onConflict: "lesson_id,student_id" },
-  );
-  if (attendanceError) {
+  ).select("student_id");
+  if (attendanceError || savedAttendance.length !== studentIds.length) {
     console.error(attendanceError);
     return { formError: "출결을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
@@ -347,4 +296,27 @@ export async function deleteSchedule(
 
   revalidatePath("/operator/schedules");
   redirect("/operator/schedules?deleted=1");
+}
+
+export async function confirmDraftSchedule(lessonId: string, _previousState: ManagementActionState): Promise<ManagementActionState> {
+  void _previousState;
+  await requireAuthenticatedUser("/login/operator", "operator");
+  if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("confirm_draft_lesson", { target_lesson_id: lessonId });
+  if (error || !data) return { formError: error?.code === "23P01" ? "학생의 다른 일정과 시간이 겹쳐 확정할 수 없습니다." : "Draft 일정을 확정하지 못했습니다." };
+  revalidatePath("/operator/schedules");
+  revalidatePath(`/operator/schedules/${lessonId}`);
+  redirect(`/operator/schedules/${lessonId}?updated=1`);
+}
+
+export async function updateLessonStaff(lessonId: string, formData: FormData) {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  const staffIds = [...new Set(formData.getAll("staff_ids").map(String))];
+  if (!UUID_PATTERN.test(lessonId) || staffIds.some((id) => !UUID_PATTERN.test(id))) redirect(`/operator/schedules/${lessonId}?staffError=1`);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("replace_lesson_staff", { target_lesson_id: lessonId, selected_staff_ids: staffIds });
+  if (error || !data) redirect(`/operator/schedules/${lessonId}?staffError=1`);
+  revalidatePath(`/operator/schedules/${lessonId}`);
+  redirect(`/operator/schedules/${lessonId}?staffUpdated=1`);
 }

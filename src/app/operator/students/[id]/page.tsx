@@ -45,7 +45,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   const supabase = await createSupabaseServerClient();
   const { data: student, error } = await supabase
     .from("students")
-    .select("id, nickname, gender, age, phone, acquisition_source, category, joined_month, special_notes")
+    .select("id, nickname, gender, age, phone, acquisition_source, joined_month, special_notes")
     .eq("id", id)
     .maybeSingle();
   if (error || !student) {
@@ -53,13 +53,15 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
     return <StudentNotFound />;
   }
 
-  const [{ data: assignments, error: assignmentError }, { data: allLessons, error: lessonsError }] = await Promise.all([
+  const [{ data: assignments, error: assignmentError }, { data: allLessons, error: lessonsError }, { data: programs, error: programsError }] = await Promise.all([
     supabase.from("lesson_assignments").select("lesson_id").eq("student_id", id).is("unassigned_at", null),
     supabase.from("lessons").select("id, title, starts_at, ends_at, status").order("starts_at", { ascending: true }),
+    supabase.from("student_program_statuses").select("student_program_id, program_type, stored_status, effective_status, started_at, ended_at, stop_reason").eq("student_id", id),
   ]);
   const assignedLessonIds = new Set(assignments?.map((assignment) => assignment.lesson_id) ?? []);
   const lessons = allLessons?.filter((lesson) => assignedLessonIds.has(lesson.id)) ?? [];
   if (assignmentError || lessonsError) console.error(assignmentError ?? lessonsError);
+  if (programsError) console.error(programsError);
 
   const notice = notices.created === "1"
     ? "학생이 등록되었습니다."
@@ -75,14 +77,13 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
       {notice ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">{notice}</p> : null}
 
       <div className="mt-6">
-        <StudentProfileCard student={{
+      <StudentProfileCard programs={(programs ?? []).map((program) => ({ id: program.student_program_id, programType: program.program_type, storedStatus: program.stored_status, effectiveStatus: program.effective_status, startedAt: program.started_at, endedAt: program.ended_at, stopReason: program.stop_reason }))} student={{
           id: student.id,
           name: student.nickname,
           gender: student.gender,
           age: student.age,
           phone: student.phone,
           acquisitionSource: student.acquisition_source,
-          category: student.category,
           joinedMonth: student.joined_month,
           specialNotes: student.special_notes,
         }} />

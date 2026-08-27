@@ -33,7 +33,7 @@ export default async function PlanCreatePage({ params }: PlanCreatePageProps) {
   const supabase = await createSupabaseServerClient();
   const { data: student, error } = await supabase
     .from("students")
-    .select("id, nickname, display_name")
+    .select("id, nickname")
     .eq("id", studentId)
     .maybeSingle();
 
@@ -47,7 +47,7 @@ export default async function PlanCreatePage({ params }: PlanCreatePageProps) {
         학생 상세로 이동
       </Link>
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">
-        <p className="text-sm font-bold text-[var(--accent-strong)]">{student.display_name || student.nickname}</p>
+        <p className="text-sm font-bold text-[var(--accent-strong)]">{student.nickname}</p>
         <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em]">새 월간 계획 만들기</h1>
         <div className="mt-8"><PlanCreateForm studentId={studentId} /></div>
       </section>

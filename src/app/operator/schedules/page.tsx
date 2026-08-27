@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-const STATUS_LABELS: Record<string, string> = { scheduled: "예정", completed: "완료", cancelled: "취소" };
+const STATUS_LABELS: Record<string, string> = { draft: "Draft", scheduled: "예정", completed: "완료", cancelled: "취소" };
 function formatDateTime(value: string) { return new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value)); }
 
 export default async function SchedulesPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {

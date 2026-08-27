@@ -126,7 +126,6 @@ export async function createStudent(
     .insert({
       auth_user_id: authData.user.id,
       nickname,
-      display_name: nickname,
     })
     .select("id")
     .single();
