@@ -4,6 +4,12 @@
 
 현재 저장소는 공모전 시연용 MVP의 개발 기반만 제공합니다. 실제 수강생 데이터는 사용하지 않으며, 로그인과 수업 관리 기능은 아직 연결되어 있지 않습니다.
 
+## 프로젝트 문서
+
+- AI/에이전트 작업 시작점: [`AGENTS.md`](AGENTS.md)
+- 제품 계획: [`docs/product-plan.md`](docs/product-plan.md)
+- 현재 기술 구조: [`docs/architecture.md`](docs/architecture.md)
+
 ## 기술 구성
 
 - Next.js 16 (App Router)
