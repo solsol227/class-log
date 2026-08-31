@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { DemoNotice } from "@/components/demo-notice";
 
 type LoginShellProps = {
@@ -34,6 +35,9 @@ export function LoginShell({
             aria-label={`${audience} 로그인 입력`}
             className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8"
           >
+            <Link href="/" className="mb-6 inline-flex min-h-10 items-center font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">
+              ← 로그인 선택으로
+            </Link>
             {children}
           </section>
         </div>

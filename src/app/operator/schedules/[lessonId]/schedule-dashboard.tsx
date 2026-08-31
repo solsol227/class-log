@@ -27,6 +27,7 @@ type AssignedStudent = { id: string; name: string; attendanceStatus: AttendanceS
 export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, attendanceBlockedReason }: { lesson: Lesson; assignedStudents: AssignedStudent[]; studentOptions: StudentSelectOption[]; attendanceBlockedReason: string | null }) {
   const [editing, setEditing] = useState(false);
   const canEdit = lesson.status !== "cancelled";
+  const editFormId = `schedule-edit-form-${lesson.id}`;
 
   return (
     <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.08)] sm:p-8">
@@ -36,11 +37,11 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
             <p className="text-sm font-bold text-[var(--accent-strong)]">일정 정보</p>
             <span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{lesson.statusLabel}</span>
           </div>
-          <h1 className="mt-4 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">{lesson.title}</h1>
         </div>
         <div className="flex items-center gap-2">
           {lesson.status === "draft" ? <ConfirmDraftForm lessonId={lesson.id} /> : null}
           {canEdit && !editing ? <button type="button" onClick={() => setEditing(true)} className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] active:translate-y-px">수정</button> : null}
+          {canEdit && editing ? <button type="submit" form={editFormId} className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px">저장</button> : null}
           <DeleteScheduleForm lessonId={lesson.id} />
         </div>
       </div>
@@ -49,11 +50,12 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
         <div className="mt-8 border-t border-[var(--line)] pt-7">
           <h2 className="text-2xl font-bold">일정 수정</h2>
           {lesson.status === "completed" ? <p className="mt-3 text-sm text-[var(--muted)]">완료된 일정도 정보와 학생 배정을 수정할 수 있습니다.</p> : null}
-          <div className="mt-5"><ScheduleForm mode="edit" lessonId={lesson.id} initialValues={{ title: lesson.title, date: lesson.dateInput, startTime: lesson.startTimeInput, endTime: lesson.endTimeInput, location: lesson.location ?? "", notes: lesson.notes ?? "", studentIds: assignedStudents.map((student) => student.id), programType: lesson.programType, status: lesson.status }} students={studentOptions} onCancel={() => setEditing(false)} /></div>
+          <div className="mt-5"><ScheduleForm mode="edit" lessonId={lesson.id} formId={editFormId} initialValues={{ title: lesson.title, date: lesson.dateInput, startTime: lesson.startTimeInput, endTime: lesson.endTimeInput, location: lesson.location ?? "", notes: lesson.notes ?? "", studentIds: assignedStudents.map((student) => student.id), programType: lesson.programType, status: lesson.status }} students={studentOptions} onCancel={() => setEditing(false)} /></div>
         </div>
       ) : (
         <>
           <dl className="mt-8 grid gap-5 sm:grid-cols-2">
+            <div className="sm:col-span-2"><dt className="text-sm font-bold text-[var(--muted)]">제목</dt><dd className="mt-1 text-2xl font-bold">{lesson.title}</dd></div>
             <div><dt className="text-sm font-bold text-[var(--muted)]">날짜</dt><dd className="mt-1 text-lg">{lesson.dateLabel}</dd></div>
             <div><dt className="text-sm font-bold text-[var(--muted)]">시간</dt><dd className="mt-1 text-lg">{lesson.timeLabel}</dd></div>
             <div><dt className="text-sm font-bold text-[var(--muted)]">장소</dt><dd className="mt-1 text-lg">{lesson.location || "등록된 장소가 없습니다."}</dd></div>

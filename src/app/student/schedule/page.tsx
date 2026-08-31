@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type StudentSchedulePageProps = {
@@ -7,12 +8,6 @@ type StudentSchedulePageProps = {
 };
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: "예정",
-  completed: "완료",
-  cancelled: "취소",
-};
-
 function monthKey(value: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     year: "numeric",
@@ -55,17 +50,40 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
   }
 
   const lessonIds = assignments.map((assignment) => assignment.lesson_id);
-  const { data: lessons, error: lessonsError } = lessonIds.length
-    ? await supabase
-        .from("lessons")
-        .select("id, title, starts_at, ends_at, location, status")
-        .in("id", lessonIds)
-        .order("starts_at", { ascending: true })
+  const [lessonsResult, lessonStaffResult] = lessonIds.length
+    ? await Promise.all([
+        supabase
+          .from("lessons")
+          .select("id, title, starts_at, ends_at, location, status")
+          .in("id", lessonIds)
+          .order("starts_at", { ascending: true }),
+        supabase
+          .from("lesson_staff")
+          .select("lesson_id, staff_id, created_at")
+          .in("lesson_id", lessonIds)
+          .order("created_at", { ascending: true }),
+      ])
+    : [{ data: [], error: null }, { data: [], error: null }];
+  const lessons = lessonsResult.data ?? [];
+  const lessonStaff = lessonStaffResult.data ?? [];
+  const staffIds = [...new Set(lessonStaff.map((entry) => entry.staff_id))];
+  const { data: staff, error: staffError } = staffIds.length
+    ? await supabase.from("staff_profiles").select("id, display_name").in("id", staffIds)
     : { data: [], error: null };
 
-  if (lessonsError) {
-    throw new Error("배정된 일정을 불러오지 못했습니다.", { cause: lessonsError });
+  if (lessonsResult.error || lessonStaffResult.error || staffError) {
+    throw new Error("배정된 일정을 불러오지 못했습니다.", { cause: lessonsResult.error ?? lessonStaffResult.error ?? staffError });
   }
+
+  const staffById = new Map((staff ?? []).map((member) => [member.id, member.display_name]));
+  const staffNamesByLesson = lessonStaff.reduce<Map<string, string[]>>((namesByLesson, entry) => {
+    const name = staffById.get(entry.staff_id);
+    if (!name) return namesByLesson;
+    const names = namesByLesson.get(entry.lesson_id) ?? [];
+    if (!names.includes(name)) names.push(name);
+    namesByLesson.set(entry.lesson_id, names);
+    return namesByLesson;
+  }, new Map());
 
   const months = [...new Set(lessons.map((lesson) => monthKey(lesson.starts_at)).filter(Boolean))];
   const years = new Set(months.map((key) => key.slice(0, 4)));
@@ -102,9 +120,10 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
                   <p className="font-bold text-[var(--accent-strong)]">{formatScheduleDate(lesson.starts_at)}</p>
                   <h2 className="mt-2 text-xl font-bold tracking-[-0.02em]">{lesson.title}</h2>
                 </div>
-                <span className="rounded-lg bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{STATUS_LABELS[lesson.status] ?? lesson.status}</span>
+                <span className="rounded-lg bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(lesson.status, lesson.ends_at)}</span>
               </div>
               {lesson.location ? <p className="mt-3 text-sm text-[var(--muted)]">장소: {lesson.location}</p> : null}
+              {(staffNamesByLesson.get(lesson.id)?.length ?? 0) > 0 ? <p className="mt-2 text-sm text-[var(--muted)]">담당 · {staffNamesByLesson.get(lesson.id)?.join(", ")}</p> : null}
             </li>
           ))}
         </ol>

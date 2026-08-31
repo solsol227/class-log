@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
+import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AttendanceForm } from "./attendance-form";
 import type { AttendanceStatus } from "./actions";
@@ -11,12 +13,6 @@ type LessonDetailPageProps = {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: "예정",
-  completed: "완료",
-  cancelled: "취소",
-};
 
 const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   present: "출석",
@@ -100,6 +96,7 @@ export default async function LessonDetailPage({
     }
     return <LessonUnavailable studentId={studentId} />;
   }
+  await syncElapsedLessonStatuses(supabase, [lesson.id]);
 
   const { data: attendance, error: attendanceError } = await supabase
     .from("attendance_records")
@@ -160,7 +157,7 @@ export default async function LessonDetailPage({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-bold text-[var(--accent-strong)]">수업 정보</p>
           <span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">
-            {STATUS_LABELS[lesson.status] ?? lesson.status}
+            {getLessonDisplayStatusLabel(lesson.status, lesson.ends_at)}
           </span>
         </div>
         <h1 className="mt-4 text-3xl font-bold tracking-[-0.04em]">

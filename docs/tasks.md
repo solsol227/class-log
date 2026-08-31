@@ -2,13 +2,12 @@
 
 ## 현재 기준
 
-- PR #16 merge 완료
-- merge commit: `dc69f7bc072aabf5d81399870f5469179b05d793`
-- main = origin/main
-- migration local/remote 17개 일치
-- ESLint / production build / git diff --check 통과
-- 운영자/학생 smoke test 통과
-- working tree clean
+- PR #18 구현 브랜치: `feat/operator-ux-improvements`
+- 기준 main commit: `03b1d66ef5154ad125ebe90a6a9a74d4ad5b99f6`
+- migration local/remote 20개 일치
+- ESLint / TypeScript / production build / DB lint / git diff --check 통과
+- 기존 사용자 데이터 mutation 없이 구현
+- PR #18 변경은 아직 미커밋
 
 ## 완료 — PR #15 보안 hardening
 
@@ -68,14 +67,38 @@
 - [x] `complete_makeup_lesson`
 - [x] 관련 화면 cache revalidation
 
-## 다음 PR — 운영 UX 정리
+## 구현 중 — PR #18 운영 UX 정리
 
-- [ ] 직원 수정
-- [ ] 직원 삭제
-- [ ] 직원 활성 상태 UX 단순화
-- [ ] 보강 수정
-- [ ] 보강 삭제
-- [ ] 운영자/학생 로그인 페이지 뒤로가기
+- [x] 직원 이름/역할 수정
+- [x] 모든 직원 삭제를 복원 가능한 보관으로 통일
+- [x] 삭제된 직원 복원
+- [x] 직원 상세 대시보드와 담당 일정/피드백 이력
+- [x] 직원 활성 상태 UX 단순화
+- [x] 담당 직원 차등 갱신과 기존 보관 직원 관계 유지
+- [x] requested/scheduled 보강 사유 수정
+- [x] requested 보강 안전 삭제
+- [x] completed/cancelled 보강 이력 표시
+- [x] 운영자/학생 로그인 페이지에서 로그인 선택 화면 이동
+- [x] 일정 종료 시각 기준 예정/완료 표시
+- [x] 일정 상세 상단 `수정 → 저장` 및 하단 취소 UX
+- [x] 출결 저장과 lesson 완료 상태 분리
+- [x] 일정 저장 시 `ends_at` 기준 scheduled/completed 계산
+- [x] 운영자 조회 lesson ID 범위의 종료 상태 동기화
+- [x] 학생 조회는 mutation 없이 시간 기준 display fallback 유지
+- [x] 피드백 댓글/답글 작성자 표시
+- [x] 학생 내 일정 담당 직원 표시
+- [ ] 운영자 브라우저 mutation 확인
+
+PR #19로 유지:
+- [ ] `makeup_lessons.attendance_record_id`
+- [ ] excused 출결 1건당 보강 가능 건 1개
+- [ ] 원 출결 상태 수정 시 보강 처리 정책
+- [ ] scheduled/completed 보강 연결 시 출결 변경 제한
+- [ ] cancelled 후 보강 재생성 정책
+- [ ] 예외적인 수동 보강 허용 여부
+- [ ] replacement assignment provenance
+- [ ] provenance 기반 scheduled 보강 안전 삭제
+- [ ] scheduled 보강 대기 복귀/replacement 교체 정책
 
 ## 다음 핵심 기능 — 사유결석 기반 보강
 
@@ -90,6 +113,7 @@
 - [ ] 예외적 수동 보강 필요 여부
 - [ ] makeup과 attendance_record 직접 FK 연결 여부
 - [ ] 기존 보강 데이터 migration 필요 여부
+- [ ] 현재 `학생 + 임의 원수업 + 사유` 등록 UI를 특정 excused attendance 선택 흐름으로 교체
 
 완료 목표:
 - [ ] 사유결석 근거 없는 보강 생성 차단

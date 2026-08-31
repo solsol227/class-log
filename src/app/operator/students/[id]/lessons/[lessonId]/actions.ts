@@ -11,8 +11,6 @@ const MEMO_MAX_LENGTH = 1000;
 const GENERIC_ERROR =
   "출결을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 const LESSON_NOT_FOUND_ERROR = "해당 학생의 수업을 찾을 수 없습니다.";
-const PARTIAL_SAVE_ERROR =
-  "출결은 저장되었지만 수업 상태를 완료로 변경하지 못했습니다. 화면을 새로고침한 뒤 다시 시도해 주세요.";
 
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
@@ -90,6 +88,14 @@ export async function saveAttendance(
   if (assignmentError || !assignment) {
     if (assignmentError) console.error(assignmentError);
     return { fieldErrors: {}, formError: LESSON_NOT_FOUND_ERROR, values };
+  }
+
+  if (lesson.status === "draft") {
+    return {
+      fieldErrors: {},
+      formError: "Draft 수업에는 출결을 기록할 수 없습니다. 일정을 먼저 확정해 주세요.",
+      values,
+    };
   }
 
   if (lesson.status === "cancelled") {
@@ -181,36 +187,6 @@ export async function saveAttendance(
 
   if (!attendanceSaved) {
     return { fieldErrors: {}, formError: GENERIC_ERROR, values };
-  }
-
-  if (lesson.status !== "completed") {
-    const { data: completedLesson, error: lessonUpdateError } = await supabase
-      .from("lessons")
-      .update({ status: "completed" })
-      .eq("id", lesson.id)
-      .eq("status", "scheduled")
-      .select("id")
-      .maybeSingle();
-
-    if (lessonUpdateError) {
-      console.error(lessonUpdateError);
-    }
-
-    if (lessonUpdateError || !completedLesson) {
-      const { data: currentLesson, error: currentLessonError } = await supabase
-        .from("lessons")
-        .select("status")
-        .eq("id", lesson.id)
-        .maybeSingle();
-
-      if (currentLessonError) {
-        console.error(currentLessonError);
-      }
-
-      if (currentLessonError || currentLesson?.status !== "completed") {
-        return { fieldErrors: {}, formError: PARTIAL_SAVE_ERROR, values };
-      }
-    }
   }
 
   redirect(

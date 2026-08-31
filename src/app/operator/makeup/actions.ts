@@ -43,3 +43,27 @@ export async function completeMakeup(makeupId: string) {
   if (error || !data) redirect(`/operator/makeup?error=${error?.code === "23514" ? "attendance" : "save"}`);
   revalidatePath("/operator/makeup"); redirect("/operator/makeup?updated=1");
 }
+
+export async function updateMakeupReason(makeupId: string, formData: FormData) {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  const reason = String(formData.get("reason") ?? "");
+  if (!UUID_PATTERN.test(makeupId)) redirect("/operator/makeup?error=invalid");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("update_makeup_reason", {
+    target_makeup_id: makeupId,
+    new_reason: reason,
+  });
+  if (error || data !== makeupId) redirect(`/operator/makeup?error=${error?.code === "P0002" ? "reason_state" : "reason"}`);
+  revalidatePath("/operator/makeup");
+  redirect("/operator/makeup?reasonUpdated=1");
+}
+
+export async function deleteRequestedMakeup(makeupId: string) {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  if (!UUID_PATTERN.test(makeupId)) redirect("/operator/makeup?error=invalid");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("delete_requested_makeup", { target_makeup_id: makeupId });
+  if (error || data !== makeupId) redirect(`/operator/makeup?error=${error?.code === "P0002" ? "delete_state" : "delete"}`);
+  revalidatePath("/operator/makeup");
+  redirect("/operator/makeup?deleted=1");
+}
