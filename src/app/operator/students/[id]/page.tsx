@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
+import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ScheduleAssignmentPicker } from "./schedule-assignment-picker";
 import { StudentProfileCard } from "./student-profile-card";
@@ -11,12 +13,6 @@ type OperatorStudentDetailPageProps = {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: "예정",
-  completed: "완료",
-  cancelled: "취소",
-};
-
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     dateStyle: "long",
@@ -62,6 +58,9 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   const lessons = allLessons?.filter((lesson) => assignedLessonIds.has(lesson.id)) ?? [];
   if (assignmentError || lessonsError) console.error(assignmentError ?? lessonsError);
   if (programsError) console.error(programsError);
+  if (!lessonsError && allLessons) {
+    await syncElapsedLessonStatuses(supabase, allLessons.map((lesson) => lesson.id));
+  }
 
   const notice = notices.created === "1"
     ? "학생이 등록되었습니다."
@@ -103,7 +102,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
             {lessons.map((lesson) => (
               <li key={lesson.id}>
                 <Link href={`/operator/schedules/${lesson.id}`} className="block rounded-xl border border-[var(--line)] p-4 transition hover:border-[var(--accent)]">
-                  <span className="flex flex-wrap items-center justify-between gap-2"><span className="font-bold">{lesson.title}</span><span className="text-sm font-bold text-[var(--accent-strong)]">{STATUS_LABELS[lesson.status] ?? lesson.status}</span></span>
+                  <span className="flex flex-wrap items-center justify-between gap-2"><span className="font-bold">{lesson.title}</span><span className="text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(lesson.status, lesson.ends_at)}</span></span>
                   <span className="mt-2 block text-sm text-[var(--muted)]">{formatDateTime(lesson.starts_at)}</span>
                 </Link>
               </li>

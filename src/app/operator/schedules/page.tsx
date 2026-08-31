@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
+import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-const STATUS_LABELS: Record<string, string> = { draft: "Draft", scheduled: "예정", completed: "완료", cancelled: "취소" };
 function formatDateTime(value: string) { return new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value)); }
 
 export default async function SchedulesPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
@@ -14,6 +15,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
     supabase.from("lesson_assignments").select("lesson_id").is("unassigned_at", null),
   ]);
   if (error || assignmentsError) throw new Error("일정 목록을 불러오지 못했습니다.", { cause: error ?? assignmentsError });
+  await syncElapsedLessonStatuses(supabase, lessons.map((lesson) => lesson.id));
 
   const assignmentCounts = assignments.reduce<Record<string, number>>((counts, assignment) => {
     counts[assignment.lesson_id] = (counts[assignment.lesson_id] ?? 0) + 1;
@@ -30,7 +32,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
       {lessons.length === 0 ? (
         <section className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8"><p className="font-bold">등록된 일정이 없습니다.</p><Link href="/operator/schedules/new" className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white">새 일정 등록</Link></section>
       ) : (
-        <ul className="mt-8 space-y-3">{lessons.map((lesson) => <li key={lesson.id}><Link href={`/operator/schedules/${lesson.id}`} className="block rounded-2xl border border-[var(--line)] bg-white p-5 transition hover:border-[var(--accent)]"><span className="flex flex-wrap items-center justify-between gap-3"><span className="text-lg font-bold">{lesson.title}</span><span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{STATUS_LABELS[lesson.status] ?? lesson.status}</span></span><span className="mt-3 block text-sm text-[var(--muted)]">{formatDateTime(lesson.starts_at)} - {formatDateTime(lesson.ends_at)}</span><span className="mt-2 block text-sm font-bold text-[var(--accent-strong)]">배정 학생 {assignmentCounts[lesson.id] ?? 0}명</span></Link></li>)}</ul>
+        <ul className="mt-8 space-y-3">{lessons.map((lesson) => <li key={lesson.id}><Link href={`/operator/schedules/${lesson.id}`} className="block rounded-2xl border border-[var(--line)] bg-white p-5 transition hover:border-[var(--accent)]"><span className="flex flex-wrap items-center justify-between gap-3"><span className="text-lg font-bold">{lesson.title}</span><span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(lesson.status, lesson.ends_at)}</span></span><span className="mt-3 block text-sm text-[var(--muted)]">{formatDateTime(lesson.starts_at)} - {formatDateTime(lesson.ends_at)}</span><span className="mt-2 block text-sm font-bold text-[var(--accent-strong)]">배정 학생 {assignmentCounts[lesson.id] ?? 0}명</span></Link></li>)}</ul>
       )}
     </main>
   );

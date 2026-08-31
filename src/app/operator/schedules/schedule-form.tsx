@@ -27,14 +27,13 @@ function FormActions({ mode, onCancel }: { mode: "create" | "edit"; onCancel?: (
   }
 
   return (
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+    <div className="flex justify-end">
       <button type="button" disabled={pending} onClick={onCancel} className="min-h-12 rounded-xl border border-[#9badaa] px-5 font-bold text-[var(--foreground)] transition hover:bg-[#f4f8f7] active:translate-y-px disabled:opacity-60">취소</button>
-      <button type="submit" disabled={pending} className="min-h-12 rounded-xl bg-[var(--accent)] px-6 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px disabled:cursor-wait disabled:opacity-70">{pending ? "저장하는 중입니다..." : "저장"}</button>
     </div>
   );
 }
 
-export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel }: { mode: "create" | "edit"; lessonId?: string; initialValues?: ScheduleValues; students?: StudentSelectOption[]; onCancel?: () => void }) {
+export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel, formId }: { mode: "create" | "edit"; lessonId?: string; initialValues?: ScheduleValues; students?: StudentSelectOption[]; onCancel?: () => void; formId?: string }) {
   const action = mode === "edit" && lessonId ? updateSchedule.bind(null, lessonId) : createSchedule;
   const [state, formAction] = useActionState(action, INITIAL_STATE);
   const dateTimeFieldsRef = useRef<ScheduleDateTimeFieldsHandle>(null);
@@ -46,11 +45,11 @@ export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel
   const selectedProgramStudentIds = values?.studentIds?.filter((studentId) => programStudentIds.has(studentId));
 
   return (
-    <form action={formAction} onSubmit={(event) => { if (dateTimeFieldsRef.current && !dateTimeFieldsRef.current.validate()) event.preventDefault(); }} className="space-y-5" noValidate>
+    <form id={formId} action={formAction} onSubmit={(event) => { if (dateTimeFieldsRef.current && !dateTimeFieldsRef.current.validate()) event.preventDefault(); }} className="space-y-5" noValidate>
       {state.formError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{state.formError}</p> : null}
       <FormInput id="schedule-title" label="제목" name="title" defaultValue={values?.title} error={state.fieldErrors.title} />
       <div><label htmlFor="schedule-program" className="mb-2 block text-sm font-bold">프로그램</label><select id="schedule-program" name="program_type" value={programType} onChange={(event) => setProgramType(event.target.value)} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4"><option value="weekday_vocal">평일보컬</option><option value="weekend_vocal">주말보컬</option><option value="trial">체험</option></select>{state.fieldErrors.program ? <p className="mt-2 text-sm font-semibold text-rose-800">{state.fieldErrors.program}</p> : null}</div>
-      {mode === "create" || values?.status === "draft" || values?.status === "scheduled" ? <div><label htmlFor="schedule-status" className="mb-2 block text-sm font-bold">저장 상태</label><select id="schedule-status" name="status" defaultValue={values?.status ?? "scheduled"} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4"><option value="scheduled">확정 일정</option><option value="draft">Draft</option></select></div> : <input type="hidden" name="status" value={values?.status ?? "completed"} />}
+      <div><label htmlFor="schedule-status" className="mb-2 block text-sm font-bold">저장 상태</label><select id="schedule-status" name="status" defaultValue={values?.status === "draft" ? "draft" : "scheduled"} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4"><option value="scheduled">확정 일정</option><option value="draft">Draft</option></select></div>
       <ScheduleDateTimeFields ref={dateTimeFieldsRef} key={dateTimeKey} initialDate={values?.date} initialStartTime={values?.startTime} initialEndTime={values?.endTime} dateError={state.fieldErrors.date} startError={state.fieldErrors.startsAt} endError={state.fieldErrors.endsAt} />
       <div>
         <label htmlFor="schedule-location" className="mb-2 block text-sm font-bold">장소 선택 (선택)</label>

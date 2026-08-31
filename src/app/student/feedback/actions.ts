@@ -16,5 +16,6 @@ export async function addStudentComment(feedbackId: string, formData: FormData) 
   const { data, error } = await supabase.from("feedback_comments").insert({ feedback_id: feedbackId, parent_comment_id: parentCommentId, body }).select("id").maybeSingle();
   if (error || !data) redirect("/student/feedback?error=1");
   revalidatePath("/student/feedback");
+  revalidatePath("/operator/schedules/[lessonId]", "page");
   redirect("/student/feedback?commented=1");
 }

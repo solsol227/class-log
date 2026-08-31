@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
+import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type LessonsPageProps = {
@@ -8,12 +10,6 @@ type LessonsPageProps = {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const STATUS_LABELS: Record<string, string> = {
-  scheduled: "예정",
-  completed: "완료",
-  cancelled: "취소",
-};
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -89,6 +85,9 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
   if (assignmentsError || lessonsError) {
     console.error(assignmentsError ?? lessonsError);
   }
+  if (!lessonsError) {
+    await syncElapsedLessonStatuses(supabase, lessons.map((lesson) => lesson.id));
+  }
 
   return (
     <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
@@ -138,7 +137,7 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
                 <span className="flex flex-wrap items-center justify-between gap-3">
                   <span className="text-lg font-bold">{lesson.title}</span>
                   <span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">
-                    {STATUS_LABELS[lesson.status] ?? lesson.status}
+                    {getLessonDisplayStatusLabel(lesson.status, lesson.ends_at)}
                   </span>
                 </span>
                 <span className="mt-3 block text-sm text-[var(--muted)]">

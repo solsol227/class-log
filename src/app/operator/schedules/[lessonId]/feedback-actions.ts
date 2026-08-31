@@ -22,6 +22,7 @@ export async function createFeedback(lessonId: string, formData: FormData) {
   const { data, error } = await supabase.from("lesson_feedback").insert({ lesson_id: lessonId, student_id: studentId, author_staff_id: authorStaffId, body, published_at: publishedAt }).select("id").maybeSingle();
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath("/student/feedback");
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }
 
@@ -34,6 +35,7 @@ export async function updateFeedback(lessonId: string, feedbackId: string, formD
   const { data, error } = await supabase.from("lesson_feedback").update({ body, published_at: publishedAt }).eq("id", feedbackId).eq("lesson_id", lessonId).is("deleted_at", null).select("id").maybeSingle();
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath("/student/feedback");
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }
 
@@ -44,6 +46,7 @@ export async function deleteFeedback(lessonId: string, feedbackId: string) {
   const { data, error } = await supabase.from("lesson_feedback").update({ deleted_at: new Date().toISOString() }).eq("id", feedbackId).eq("lesson_id", lessonId).is("deleted_at", null).select("id").maybeSingle();
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath("/student/feedback");
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }
 
@@ -56,5 +59,6 @@ export async function addOperatorComment(lessonId: string, feedbackId: string, f
   const { data, error } = await supabase.from("feedback_comments").insert({ feedback_id: feedbackId, parent_comment_id: parentCommentId, body }).select("id").maybeSingle();
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath("/student/feedback");
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }

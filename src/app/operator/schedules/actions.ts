@@ -95,7 +95,7 @@ function readScheduleForm(formData: FormData) {
     fieldErrors.students = "배정할 학생 정보를 다시 선택해 주세요.";
   }
   if (!["weekday_vocal", "weekend_vocal", "trial"].includes(programType)) fieldErrors.program = "프로그램을 다시 선택해 주세요.";
-  if (!["draft", "scheduled", "completed"].includes(status)) fieldErrors.program = "일정 상태를 확인해 주세요.";
+  if (!["draft", "scheduled"].includes(status)) fieldErrors.program = "일정 상태를 확인해 주세요.";
 
   return {
     fieldErrors,
@@ -165,7 +165,7 @@ export async function updateSchedule(
   const { data: updated, error } = await supabase.rpc("save_lesson_with_assignments", {
     lesson_id: lessonId, lesson_title: parsed.record.title, lesson_starts_at: parsed.record.starts_at,
     lesson_ends_at: parsed.record.ends_at, lesson_location: parsed.record.location ?? "", lesson_notes: parsed.record.notes ?? "",
-    lesson_program_type: parsed.record.program_type, lesson_status: lesson.status === "completed" ? "completed" : parsed.record.status,
+    lesson_program_type: parsed.record.program_type, lesson_status: parsed.record.status,
     selected_student_ids: parsed.values.studentIds,
   });
 
@@ -244,20 +244,6 @@ export async function saveRosterAttendance(
   if (attendanceError || savedAttendance.length !== studentIds.length) {
     console.error(attendanceError);
     return { formError: "출결을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
-  }
-
-  if (lesson.status !== "completed") {
-    const { data: completed, error: completeError } = await supabase
-      .from("lessons")
-      .update({ status: "completed" })
-      .eq("id", lessonId)
-      .eq("status", "scheduled")
-      .select("id")
-      .maybeSingle();
-    if (completeError || !completed) {
-      if (completeError) console.error(completeError);
-      return { formError: "출결은 저장했지만 일정을 완료 상태로 변경하지 못했습니다. 화면을 새로고침해 확인해 주세요." };
-    }
   }
 
   revalidatePath("/operator/schedules");

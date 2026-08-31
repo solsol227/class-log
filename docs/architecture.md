@@ -5,11 +5,11 @@
 
 ## 현재 기준
 
-- 기준 브랜치: `main`
-- PR #16 merge 완료
-- merge commit: `dc69f7bc072aabf5d81399870f5469179b05d793`
-- local/remote migration: 17개 일치
-- PR #16 신규 migration: 11개 (`20260826000000` ~ `20260826100000`)
+- 구현 브랜치: `feat/operator-ux-improvements`
+- 기준 main commit: `03b1d66ef5154ad125ebe90a6a9a74d4ad5b99f6`
+- PR #18 운영 UX 개선 구현 중
+- local/remote migration: 20개 일치
+- PR #18 신규 migration: `20260828000000`, `20260831000000`, `20260831120000`
 
 ## 1. 학생
 
@@ -82,6 +82,16 @@ Draft:
 - 학생에게 안 보임
 - 시간 충돌 검사에는 포함
 
+DB `lessons.status`와 화면 표시 상태는 같은 의미를 사용한다.
+- `draft`: 미확정 일정
+- `cancelled`: 취소 일정
+- `scheduled`: 확정 일정이며 `ends_at > now()`
+- `completed`: 확정 일정이며 `ends_at <= now()`
+
+일정 생성·수정 RPC는 클라이언트의 `completed` 입력을 받지 않고 DB 시간으로 상태를 계산한다.
+운영자 화면은 실제 조회한 lesson ID만 공통 RPC에 전달해, 종료된 `scheduled` row를 idempotent하게 `completed`로 동기화한다.
+학생 화면은 DB를 변경하지 않으며, 동기화 전 stale row에도 올바른 상태를 보이도록 시간 기준 display fallback을 유지한다.
+
 ## 4. lesson_assignments
 
 복합 PK `(lesson_id, student_id)`와 soft-unassign 구조를 유지한다.
@@ -139,6 +149,21 @@ Draft를 scheduled로 확정한다.
 담당자 교체는 `replace_lesson_staff` RPC에서 원자 처리한다.
 성공 시 일정 상세에 `담당직원이 저장되었습니다.`를 표시한다.
 
+직원 삭제는 `delete_or_archive_staff` RPC에서 항상 `is_active = false`로 보관한다.
+- 참조 유무와 관계없이 직원 profile을 hard delete하지 않는다.
+- 실수 삭제를 복원할 수 있고 미래 직원 활동 대시보드의 기록 일관성을 유지한다.
+- Auth 사용자는 삭제하거나 변경하지 않는다.
+
+보관된 직원은 `restore_staff_profile`로 복원한다. 일반 직원 화면에서는 별도의 활성/비활성 토글을 노출하지 않는다.
+
+`/operator/staff/[staffId]`에서 직원 정보, 당시 역할을 포함한 담당 일정, 삭제되지 않은 피드백 이력을 조회한다. 보관 직원의 상세와 과거 기록도 유지한다.
+
+`replace_lesson_staff`는 차등 갱신한다.
+- 선택 해제된 관계만 삭제한다.
+- 기존 관계는 직원이 보관 상태여도 유지한다.
+- 새 관계는 활성 직원만 추가한다.
+- 기존 `lesson_staff.role`은 직원 profile의 role 변경과 무관하게 당시 역할 기록으로 유지한다.
+
 ## 8. 피드백
 
 `lesson_feedback`:
@@ -152,6 +177,8 @@ Draft를 scheduled로 확정한다.
 - 댓글/답글 thread
 - parent는 같은 feedback 안에서만 연결
 - soft-delete
+- `author_user_id`를 학생 `auth_user_id` 또는 직원 `auth_user_id`와 연결해 작성자 이름을 표시
+- 직원 profile에 연결되지 않은 운영 계정은 `운영자`로 표시
 
 기존 `feedback_responses`는 제거 완료했다.
 
@@ -189,6 +216,14 @@ Draft에서도:
 ### `complete_makeup_lesson`
 보강 완료 조건 확인과 상태 변경을 원자 처리한다.
 
+### 운영 수정
+
+`update_makeup_reason`은 requested/scheduled 상태에서만 사유를 수정한다.
+`delete_requested_makeup`은 replacement가 없는 requested 상태에서만 row를 삭제한다.
+
+scheduled 보강의 취소·대기 복귀·replacement 교체와 assignment 자동 제거는 지원하지 않는다.
+completed/cancelled는 읽기 전용 이력으로 유지한다.
+
 ## 10. 출결
 
 `attendance_records`의 `(lesson_id, student_id)` 단일 최종 기록 구조를 유지한다.
@@ -200,6 +235,8 @@ Draft에서도:
 
 `recorded_at`은 최초 기록 시각이므로 유지한다.
 Draft에는 출결을 기록하지 않는다.
+출결 저장은 `attendance_records`만 변경하며 lesson 완료 상태를 만들지 않는다.
+`lessons.completed`는 출결 완료가 아니라 확정 일정의 종료 시각 경과를 의미한다.
 
 ## 11. RLS
 

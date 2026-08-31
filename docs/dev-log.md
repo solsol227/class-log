@@ -20,6 +20,17 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-08-31 — Codex — PR #18 운영 UX 개선 구현
+
+- 한 일: 직원 이름/역할 수정, 항상 복원 가능한 직원 보관, 삭제 직원 복원, 직원 상세 대시보드, 담당자 차등 갱신, 보강 사유 수정과 requested 삭제, cancelled 이력 표시, 역할별 로그인 페이지의 로그인 선택 링크를 구현했다.
+- 한 일: 일정 종료 시각 기반 표시 상태, 일정 상세 중복 제목 제거, 피드백 댓글 작성자, 학생 내 일정 담당 직원 표시를 브라우저 피드백으로 추가했다.
+- 한 일: 일정 상세 저장 버튼을 상단 action으로 이동하고, `lessons.completed`를 출결 완료가 아닌 일정 종료 시각 경과 의미로 통일했다. 출결 action의 lesson 상태 변경을 제거하고 Draft 차단을 일관되게 적용했다.
+- 한 일: 일정 저장 DB trigger/RPC와 운영자 조회 범위 동기화 RPC를 append-only `20260831120000_align_lesson_status_with_time.sql`로 추가했다. 학생 조회는 DB를 변경하지 않고 시간 기준 표시 fallback만 사용한다.
+- 확인된 것: 기존 `is_active`를 내부 검증에 유지하고 상시 활성 토글은 제거했다. 보관 직원의 기존 `lesson_staff`와 `lesson_feedback` 관계 및 과거 role은 유지하며, 신규 담당자와 피드백 작성자 선택에서는 제외한다.
+- 확인된 것: `20260828000000_add_operator_ux_workflows.sql`과 후속 append-only `20260831000000_refine_operator_ux_workflows.sql`을 원격에 적용했다. 후속 migration에서 직원 삭제를 항상 보관하도록 재정의했다.
+- 확인된 것: ESLint, TypeScript, production build, `git diff --check`를 통과했다.
+- 다음 할 일: 운영자 브라우저에서 직원 보관/복원과 requested 보강 사유 수정·삭제를 실제 데이터 정책에 맞게 확인한다. PR #19에서 특정 excused attendance 기반 보강, assignment provenance와 scheduled 안전 삭제를 함께 설계한다.
+
 ## 2026-08-28 — 문서 체계 추가
 
 - 한 일: 최신 `main`에서 Class Log 프로젝트 하네스, 제품·아키텍처·설계 결정·작업 계획·개발 기록·UX·Git·Supabase migration 안전 문서를 추가했다.
