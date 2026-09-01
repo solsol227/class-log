@@ -11,7 +11,12 @@ const OPTIONS: Array<{ value: AttendanceStatus; label: string }> = [
   { value: "excused", label: "사유결석" },
 ];
 
-type RosterStudent = { id: string; name: string; status: AttendanceStatus | null };
+type RosterStudent = {
+  id: string;
+  name: string;
+  status: AttendanceStatus | null;
+  makeupStatus: string | null;
+};
 
 function SaveButton() {
   const { pending } = useFormStatus();
@@ -26,23 +31,42 @@ export function RosterAttendanceForm({ lessonId, students, blockedReason }: { le
       {state.formError ? <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{state.formError}</p> : null}
       {blockedReason ? <p className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 font-bold text-amber-950">{blockedReason}</p> : null}
       <div className="space-y-3">
-        {students.map((student) => (
-          <fieldset key={student.id} disabled={Boolean(blockedReason)} className="grid gap-3 rounded-xl border border-[var(--line)] p-4 sm:grid-cols-[minmax(9rem,1fr)_minmax(0,2fr)] sm:items-center">
-            <legend className="sr-only">{student.name} 출결 상태</legend>
-            <div>
-              <p className="font-bold">{student.name}</p>
-              <p className="mt-1 text-sm text-[var(--muted)]">{student.status ? "기록됨" : "미기록"}</p>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {OPTIONS.map((option) => (
-                <label key={option.value} className="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-[#9badaa] bg-white px-2 text-center text-sm font-bold has-checked:border-[var(--accent)] has-checked:bg-[#e5f2f0] has-checked:text-[var(--accent-strong)] has-disabled:cursor-not-allowed has-disabled:opacity-60">
-                  <input type="radio" name={`attendance_${student.id}`} value={option.value} defaultChecked={student.status === option.value} className="sr-only" />
-                  {option.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        ))}
+        {students.map((student) => {
+          const makeupLocksAttendance = student.status === "excused"
+            && student.makeupStatus === "completed";
+          const makeupNotice = student.makeupStatus === "completed"
+            ? "완료된 보강과 연결되어 사유결석 상태를 변경할 수 없습니다."
+            : student.status === "excused" && student.makeupStatus === "scheduled"
+              ? "출결을 변경하면 보강 예정이 자동 취소되고 보강이 만든 대체 일정 배정도 정리됩니다."
+              : student.status === "excused" && student.makeupStatus === "requested"
+                ? "출결을 변경하면 보강 대기가 자동 취소됩니다."
+              : null;
+          return (
+            <fieldset key={student.id} disabled={Boolean(blockedReason)} className="grid gap-3 rounded-xl border border-[var(--line)] p-4 sm:grid-cols-[minmax(9rem,1fr)_minmax(0,2fr)] sm:items-center">
+              <legend className="sr-only">{student.name} 출결 상태</legend>
+              <div>
+                <p className="font-bold">{student.name}</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">{student.status ? "기록됨" : "미기록"}</p>
+                {makeupNotice ? <p className="mt-2 text-xs font-semibold text-amber-800">{makeupNotice}</p> : null}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {OPTIONS.map((option) => (
+                  <label key={option.value} className="flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-[#9badaa] bg-white px-2 text-center text-sm font-bold has-checked:border-[var(--accent)] has-checked:bg-[#e5f2f0] has-checked:text-[var(--accent-strong)] has-disabled:cursor-not-allowed has-disabled:opacity-60">
+                    <input
+                      type="radio"
+                      name={`attendance_${student.id}`}
+                      value={option.value}
+                      defaultChecked={student.status === option.value}
+                      disabled={makeupLocksAttendance && option.value !== "excused"}
+                      className="sr-only"
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          );
+        })}
       </div>
       {!blockedReason ? <div className="mt-5"><SaveButton /></div> : null}
     </form>

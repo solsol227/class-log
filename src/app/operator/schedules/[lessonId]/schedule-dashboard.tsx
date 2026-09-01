@@ -22,7 +22,12 @@ type Lesson = {
   programType: string;
 };
 
-type AssignedStudent = { id: string; name: string; attendanceStatus: AttendanceStatus | null };
+type AssignedStudent = {
+  id: string;
+  name: string;
+  attendanceStatus: AttendanceStatus | null;
+  makeupStatus: string | null;
+};
 
 export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, attendanceBlockedReason }: { lesson: Lesson; assignedStudents: AssignedStudent[]; studentOptions: StudentSelectOption[]; attendanceBlockedReason: string | null }) {
   const [editing, setEditing] = useState(false);
@@ -64,7 +69,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
           </dl>
           <div className="mt-8 border-t border-[var(--line)] pt-7">
             <h2 className="text-2xl font-bold">배정된 학생</h2>
-            {assignedStudents.length === 0 ? <p className="mt-4 text-[var(--muted)]">아직 배정된 학생이 없습니다.</p> : <RosterAttendanceForm lessonId={lesson.id} students={assignedStudents.map((student) => ({ id: student.id, name: student.name, status: student.attendanceStatus }))} blockedReason={attendanceBlockedReason} />}
+            {assignedStudents.length === 0 ? <p className="mt-4 text-[var(--muted)]">아직 배정된 학생이 없습니다.</p> : <RosterAttendanceForm lessonId={lesson.id} students={assignedStudents.map((student) => ({ id: student.id, name: student.name, status: student.attendanceStatus, makeupStatus: student.makeupStatus }))} blockedReason={attendanceBlockedReason} />}
           </div>
         </>
       )}

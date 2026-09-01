@@ -20,6 +20,18 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-09-01 — Codex — PR #19 사유결석 기반 보강 구현
+
+- 한 일: excused 출결과 `makeup_lessons`를 필수 UNIQUE FK로 연결하고, replacement 출결·assignment provenance·operator event history를 추가한 append-only migration을 원격에 적용했다.
+- 한 일: requested 매칭, scheduled 일정 변경/대기 복귀, entitlement 취소/동일 row 재개, replacement 출결 기반 완료를 RPC로 구현했다. 출결 저장 trigger는 중복 없이 entitlement를 만들고 원 출결 변경 우회를 차단한다.
+- 한 일: `/operator/makeup`을 사유결석 기반 대기/예정/완료/취소 흐름으로 바꾸고 임의 생성·hard delete를 제거했다. 두 출결 저장 경로에 보강 정책 안내와 관련 cache revalidation을 연결했다.
+- 한 일: 사용자 확인 결과를 반영해 원 출결 변경이 보강을 자동 취소/재개하고 대체 출결 저장이 보강을 자동 완료하도록 개선했다. 보강관리 정상 동선은 일정 배정/변경만 남겼다.
+- 한 일: 대체 일정 변경에서 provenance가 created/reactivated인 이전 assignment를 안전 조건 확인 후 자동 soft-unassign하고, existing 또는 보존 기록이 있는 assignment는 보호한다.
+- 한 일: 실제 일정 변경 실패를 rollback transaction으로 재현해 일반 운영자 event 원인이 NULL로 남는 23502 오류를 확인했다. append-only migration에서 NULL을 `operator`로 정규화하고 같은 일정 선택을 UI/action에서 차단했다.
+- 확인된 것: 최초 적용 직전 `attendance_records`와 `makeup_lessons`는 모두 0건이었다. 사용자 확인 후에는 excused 출결 1건과 scheduled 보강 1건이 있었고 예상한 브라우저 흐름과 일치했다. 진단 변경은 전부 롤백했고 기존 row를 변경하지 않았으며 local/remote migration 24개가 일치한다.
+- 막힌 것: 원격 pgTAP 명령은 연결 후에도 로컬 Docker를 요구해 실행되지 않았다. 롤백형 회귀 SQL은 저장소에 추가했으며 Docker 또는 동등한 직접 DB 실행 환경에서 재실행해야 한다.
+- 다음 할 일: 정적 검사와 production build를 마치고 운영자 브라우저에서 사유결석→보강 매칭→replacement 출결 흐름을 확인한다. 사용자 승인 전 commit/push/PR/merge하지 않는다.
+
 ## 2026-08-31 — Codex — PR #18 운영 UX 개선 구현
 
 - 한 일: 직원 이름/역할 수정, 항상 복원 가능한 직원 보관, 삭제 직원 복원, 직원 상세 대시보드, 담당자 차등 갱신, 보강 사유 수정과 requested 삭제, cancelled 이력 표시, 역할별 로그인 페이지의 로그인 선택 링크를 구현했다.

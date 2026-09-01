@@ -16,6 +16,7 @@ const SCHEDULE_ERROR =
 function scheduleRpcErrorMessage(code?: string) {
   if (code === "23P01") return "선택한 학생에게 시간이 겹치는 다른 일정이 있습니다.";
   if (code === "23514") return "일정 프로그램과 학생의 이용 프로그램을 다시 확인해 주세요.";
+  if (code === "P0001") return "보강으로 연결된 학생입니다. 보강관리에서 대체 일정을 변경해 주세요.";
   return SCHEDULE_ERROR;
 }
 
@@ -243,11 +244,18 @@ export async function saveRosterAttendance(
   ).select("student_id");
   if (attendanceError || savedAttendance.length !== studentIds.length) {
     console.error(attendanceError);
-    return { formError: "출결을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    return {
+      formError: attendanceError?.code === "P0001"
+        ? "대체 일정에 보존해야 할 출결 또는 피드백 기록이 있어 원 출결을 변경할 수 없습니다. 연결된 기록을 확인해 주세요."
+        : attendanceError?.code === "23514"
+          ? "완료된 보강과 연결된 원 출결은 변경할 수 없습니다."
+        : "출결을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    };
   }
 
   revalidatePath("/operator/schedules");
   revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath("/operator/makeup");
   for (const studentId of studentIds) revalidatePath(`/operator/students/${studentId}`);
   redirect(`/operator/schedules/${lessonId}?attendanceSaved=1`);
 }
@@ -261,17 +269,24 @@ export async function deleteSchedule(
   if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
 
   const supabase = await createSupabaseServerClient();
-  const { data: replacementMakeups, error: lookupError } = await supabase
-    .from("makeup_lessons")
-    .select("id")
-    .eq("replacement_lesson_id", lessonId)
-    .limit(1);
-  if (lookupError) {
-    console.error(lookupError);
+  const [makeupsResult, makeupEventsResult] = await Promise.all([
+    supabase
+      .from("makeup_lessons")
+      .select("id")
+      .or(`original_lesson_id.eq.${lessonId},replacement_lesson_id.eq.${lessonId}`)
+      .limit(1),
+    supabase
+      .from("makeup_lesson_events")
+      .select("id")
+      .eq("replacement_lesson_id", lessonId)
+      .limit(1),
+  ]);
+  if (makeupsResult.error || makeupEventsResult.error) {
+    console.error(makeupsResult.error ?? makeupEventsResult.error);
     return { formError: "관련 기록을 확인하지 못해 일정을 삭제하지 않았습니다." };
   }
-  if (replacementMakeups.length > 0) {
-    return { formError: "이 일정이 보강 수업으로 연결되어 있어 삭제할 수 없습니다. 보강 기록을 먼저 확인해 주세요." };
+  if (makeupsResult.data.length > 0 || makeupEventsResult.data.length > 0) {
+    return { formError: "이 일정이 보강 원수업·대체 일정 또는 처리 이력으로 연결되어 있어 삭제할 수 없습니다." };
   }
 
   const { data: deleted, error } = await supabase.from("lessons").delete().eq("id", lessonId).select("id").maybeSingle();

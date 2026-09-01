@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -138,6 +139,7 @@ export async function saveAttendance(
   }
 
   let attendanceSaved = false;
+  let attendanceFailureCode: string | undefined;
 
   if (existingAttendance) {
     const { data: updatedAttendance, error: updateError } = await supabase
@@ -151,6 +153,7 @@ export async function saveAttendance(
 
     if (updateError) {
       console.error(updateError);
+      attendanceFailureCode = updateError.code;
     }
 
     attendanceSaved = !updateError && Boolean(updatedAttendance);
@@ -177,18 +180,31 @@ export async function saveAttendance(
 
       if (retryError) {
         console.error(retryError);
+        attendanceFailureCode = retryError.code;
       }
 
       attendanceSaved = !retryError && Boolean(updatedAttendance);
     } else {
       console.error(insertError);
+      attendanceFailureCode = insertError.code;
     }
   }
 
   if (!attendanceSaved) {
-    return { fieldErrors: {}, formError: GENERIC_ERROR, values };
+    return {
+      fieldErrors: {},
+      formError: attendanceFailureCode === "P0001"
+        ? "대체 일정에 보존해야 할 출결 또는 피드백 기록이 있어 원 출결을 변경할 수 없습니다. 연결된 기록을 확인해 주세요."
+        : attendanceFailureCode === "23514"
+          ? "완료된 보강과 연결된 원 출결은 변경할 수 없습니다."
+        : GENERIC_ERROR,
+      values,
+    };
   }
 
+  revalidatePath("/operator/makeup");
+  revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath(`/operator/students/${studentId}`);
   redirect(
     `/operator/students/${studentId}/lessons/${lessonId}?attendanceSaved=1`,
   );

@@ -2,12 +2,11 @@
 
 ## 현재 기준
 
-- PR #18 구현 브랜치: `feat/operator-ux-improvements`
-- 기준 main commit: `03b1d66ef5154ad125ebe90a6a9a74d4ad5b99f6`
-- migration local/remote 20개 일치
-- ESLint / TypeScript / production build / DB lint / git diff --check 통과
-- 기존 사용자 데이터 mutation 없이 구현
-- PR #18 변경은 아직 미커밋
+- PR #19 구현 브랜치: `feat/excused-makeup-workflow`
+- 기준 main commit: `8568c7e111ebe87603633d30b3e8bdd2b8333fdb`
+- migration local/remote 24개 일치
+- PR #18 merge 완료
+- PR #19 구현·검증 진행 중, 아직 미커밋
 
 ## 완료 — PR #15 보안 hardening
 
@@ -67,7 +66,7 @@
 - [x] `complete_makeup_lesson`
 - [x] 관련 화면 cache revalidation
 
-## 구현 중 — PR #18 운영 UX 정리
+## 완료 — PR #18 운영 UX 정리
 
 - [x] 직원 이름/역할 수정
 - [x] 모든 직원 삭제를 복원 가능한 보관으로 통일
@@ -87,39 +86,37 @@
 - [x] 학생 조회는 mutation 없이 시간 기준 display fallback 유지
 - [x] 피드백 댓글/답글 작성자 표시
 - [x] 학생 내 일정 담당 직원 표시
-- [ ] 운영자 브라우저 mutation 확인
+- [x] 운영자 브라우저 mutation 확인
 
-PR #19로 유지:
-- [ ] `makeup_lessons.attendance_record_id`
-- [ ] excused 출결 1건당 보강 가능 건 1개
-- [ ] 원 출결 상태 수정 시 보강 처리 정책
-- [ ] scheduled/completed 보강 연결 시 출결 변경 제한
-- [ ] cancelled 후 보강 재생성 정책
-- [ ] 예외적인 수동 보강 허용 여부
-- [ ] replacement assignment provenance
-- [ ] provenance 기반 scheduled 보강 안전 삭제
-- [ ] scheduled 보강 대기 복귀/replacement 교체 정책
-
-## 다음 핵심 기능 — 사유결석 기반 보강
+## 구현 중 — PR #19 사유결석 기반 보강
 
 목표:
 `사유결석 → 보강 가능 건 → 보강 대기 → 일정 배정 → 완료`
 
-설계 전 확인:
-- [ ] excused 1건당 보강 1건인지
-- [ ] 원 출결을 나중에 수정하면 기존 보강을 어떻게 처리할지
-- [ ] scheduled/completed 보강이 있으면 원 출결 수정 제한이 필요한지
-- [ ] cancelled 후 재생성 허용 여부
-- [ ] 예외적 수동 보강 필요 여부
-- [ ] makeup과 attendance_record 직접 FK 연결 여부
-- [ ] 기존 보강 데이터 migration 필요 여부
-- [ ] 현재 `학생 + 임의 원수업 + 사유` 등록 UI를 특정 excused attendance 선택 흐름으로 교체
-
-완료 목표:
-- [ ] 사유결석 근거 없는 보강 생성 차단
-- [ ] 같은 사유결석 중복 보강 차단
-- [ ] 학생별 보강 가능 건 표시
-- [ ] 원 출결 ↔ 보강 추적
+- [x] `makeup_lessons.attendance_record_id` 필수 UNIQUE와 복합 FK
+- [x] replacement attendance 직접 연결
+- [x] excused 출결 저장 시 entitlement 자동 생성
+- [x] 같은 사유결석 중복 entitlement 차단
+- [x] requested/scheduled/completed/cancelled 상태 전이와 우회 차단
+- [x] 일정 매칭 해제와 권리 취소 분리
+- [x] cancelled 동일 row 재개
+- [x] replacement present/absent/excused 완료 흐름
+- [x] 원 출결 non-excused 변경 보호
+- [x] replacement assignment provenance
+- [x] 보수적 명시적 assignment soft-unassign
+- [x] 일반 일정 수정의 scheduled replacement assignment 해제 우회 차단
+- [x] 원 출결 기반 entitlement 자동 취소/동일 row 재개
+- [x] 대체 일정 출결 기반 자동 완료 및 연쇄 entitlement
+- [x] 대체 일정 변경 시 보강 소유 이전 assignment 자동 soft-unassign
+- [x] 수동 매칭 해제/취소/재개/완료 UX 제거
+- [x] event 원인 기록
+- [x] 일반 운영자 event 원인의 NULL 정규화와 일정 변경 RPC 회귀 수정
+- [x] operator-only append-only event history
+- [x] 임의 생성 및 hard delete UI 제거
+- [x] 사유결석 기반 대기/예정/완료/취소 화면
+- [x] 기존 데이터 0건 확인 후 append-only migration 적용
+- [x] local/remote migration history 및 DB lint 확인
+- [ ] Docker 없는 환경의 pgTAP 원격 실행 대체 또는 사용자 브라우저 확인
 
 ## 다음 핵심 기능 — 학생 일정 상세
 
