@@ -109,6 +109,17 @@ export default async function LessonDetailPage({
     console.error(attendanceError);
   }
 
+  const { data: linkedMakeup, error: linkedMakeupError } = attendance
+    ? await supabase
+        .from("makeup_lessons")
+        .select("status")
+        .eq("attendance_record_id", attendance.id)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (linkedMakeupError) {
+    console.error(linkedMakeupError);
+  }
+
   const attendanceStatus =
     attendance && isAttendanceStatus(attendance.status)
       ? attendance.status
@@ -213,7 +224,7 @@ export default async function LessonDetailPage({
           </dl>
         ) : null}
 
-        {attendanceError ? (
+        {attendanceError || linkedMakeupError ? (
           <p
             role="alert"
             className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-bold text-rose-900"
@@ -231,6 +242,7 @@ export default async function LessonDetailPage({
             initialStatus={attendanceStatus ?? "present"}
             initialMemo={attendance?.memo ?? ""}
             hasRecord={Boolean(attendance)}
+            makeupStatus={linkedMakeup?.status ?? null}
           />
         )}
       </section>

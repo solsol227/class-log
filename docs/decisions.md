@@ -6,6 +6,60 @@
 
 ---
 
+## 2026-09 — 사유결석 한 건은 하나의 보강 workflow를 만든다
+
+### 결정
+
+`makeup_lessons`가 entitlement와 workflow를 함께 나타내며, 필수 UNIQUE `attendance_record_id`로 한 사유결석에 한 row만 허용한다. 수동/source 없는 보강은 만들지 않는다.
+
+### 이유
+
+보강의 근거를 출결과 직접 연결하고 같은 사유결석을 중복 처리하는 경로를 UI와 DB 양쪽에서 제거하기 위해서다.
+
+---
+
+## 2026-09 — 보강 lifecycle은 출결이 자동 결정한다
+
+### 결정
+
+- 원 출결이 excused가 되면 entitlement를 생성하거나 동일 cancelled row를 requested로 재개한다.
+- 원 출결이 present/absent가 되면 requested/scheduled entitlement를 자동 cancelled로 만든다.
+- 대체 일정 출결이 저장되면 보강을 자동 completed로 만든다.
+- 보강관리의 정상 동선은 대체 일정 선택과 변경만 제공한다.
+- completed는 terminal/read-only다.
+
+### 이유
+
+권리 생성·취소·재개·완료를 운영자의 별도 버튼에 의존시키면 출결과 보강 상태가 어긋날 수 있다. 출결이 근거 데이터이므로 DB trigger가 같은 transaction에서 lifecycle을 결정한다. 동일 row 재개는 이력과 1:1 entitlement 불변조건을 함께 유지한다.
+
+---
+
+## 2026-09 — replacement 출결로 보강 완료와 연쇄 entitlement를 결정한다
+
+### 결정
+
+replacement 출결이 present/absent/excused이면 기존 보강을 completed로 연결한다. excused이면 해당 replacement 출결을 source로 새 requested entitlement 한 건을 자동 생성한다.
+
+원 출결을 non-excused로 변경할 때 requested/scheduled 보강은 자동 cancelled가 되며, completed 보강이 있으면 변경을 차단한다.
+
+### 이유
+
+보강 완료의 실제 근거를 replacement 출결로 남기고, 보강 일정에서도 다시 사유결석한 경우의 권리를 손실 없이 추적하기 위해서다.
+
+---
+
+## 2026-09 — 보강 소유 assignment는 안전하면 자동 정리한다
+
+### 결정
+
+대체 일정 변경 또는 원 출결 변경 시 created/reactivated assignment는 출결·피드백·다른 활성 보강 사용 여부를 확인한 뒤 자동 soft-unassign한다. existing assignment는 보강 이전부터 존재했으므로 보존한다. 의존 기록이 있으면 자동 정리하지 않고 전체 transaction을 중단한다.
+
+### 이유
+
+결정 가능한 정리를 체크박스로 운영자에게 맡기지 않으면서도, 독립 배정과 과거 기록을 훼손하지 않기 위해서다.
+
+---
+
 ## 2026-08 — 직원 삭제는 항상 복원 가능한 보관 처리
 
 ### 결정

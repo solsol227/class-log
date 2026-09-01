@@ -43,6 +43,7 @@ type AttendanceFormProps = {
   initialStatus: AttendanceStatus;
   initialMemo: string;
   hasRecord: boolean;
+  makeupStatus: string | null;
 };
 
 export function AttendanceForm({
@@ -51,11 +52,22 @@ export function AttendanceForm({
   initialStatus,
   initialMemo,
   hasRecord,
+  makeupStatus,
 }: AttendanceFormProps) {
   const action = saveAttendance.bind(null, studentId, lessonId);
   const [state, formAction] = useActionState(action, INITIAL_STATE);
   const selectedStatus = state.values?.status ?? initialStatus;
   const memo = state.values?.memo ?? initialMemo;
+  const makeupLocksAttendance = hasRecord
+    && initialStatus === "excused"
+    && makeupStatus === "completed";
+  const makeupNotice = makeupStatus === "completed"
+    ? "완료된 보강과 연결되어 사유결석 상태를 변경할 수 없습니다."
+    : initialStatus === "excused" && makeupStatus === "scheduled"
+      ? "출결을 변경하면 보강 예정이 자동 취소되고 보강이 만든 대체 일정 배정도 정리됩니다."
+      : initialStatus === "excused" && makeupStatus === "requested"
+        ? "출결을 변경하면 보강 대기가 자동 취소됩니다."
+      : null;
 
   return (
     <form action={formAction} className="mt-6 space-y-6" noValidate>
@@ -70,6 +82,11 @@ export function AttendanceForm({
 
       <fieldset>
         <legend className="text-sm font-bold">출결 상태</legend>
+        {makeupNotice ? (
+          <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950">
+            {makeupNotice}
+          </p>
+        ) : null}
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {ATTENDANCE_OPTIONS.map((option) => (
             <label
@@ -81,6 +98,7 @@ export function AttendanceForm({
                 name="status"
                 value={option.value}
                 defaultChecked={selectedStatus === option.value}
+                disabled={makeupLocksAttendance && option.value !== "excused"}
                 className="sr-only"
               />
               {option.label}

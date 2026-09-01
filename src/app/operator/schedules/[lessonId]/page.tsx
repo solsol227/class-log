@@ -55,7 +55,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   const [{ data: assignments, error: assignmentsError }, { data: students, error: studentsError }, { data: attendanceRecords, error: attendanceError }, { data: programs, error: programsError }, { data: staff }, { data: lessonStaff }, { data: feedback }, { data: comments }] = await Promise.all([
     supabase.from("lesson_assignments").select("student_id, assigned_at").eq("lesson_id", lessonId).is("unassigned_at", null).order("assigned_at"),
     supabase.from("students").select("id, nickname").order("nickname"),
-    supabase.from("attendance_records").select("student_id, status").eq("lesson_id", lessonId),
+    supabase.from("attendance_records").select("id, student_id, status").eq("lesson_id", lessonId),
     supabase.from("student_programs").select("student_id, program_type").eq("status", "active"),
     supabase.from("staff_profiles").select("id, display_name, role, is_active").order("display_name"),
     supabase.from("lesson_staff").select("staff_id, role").eq("lesson_id", lessonId),
@@ -66,14 +66,36 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
     throw new Error("일정과 학생 정보를 불러오지 못했습니다.", { cause: assignmentsError ?? studentsError ?? attendanceError });
   }
 
+  const attendanceIds = attendanceRecords.map((record) => record.id);
+  const { data: linkedMakeups, error: linkedMakeupsError } = attendanceIds.length
+    ? await supabase
+        .from("makeup_lessons")
+        .select("attendance_record_id, status")
+        .in("attendance_record_id", attendanceIds)
+    : { data: [], error: null };
+  if (linkedMakeupsError) {
+    throw new Error("출결과 연결된 보강 정보를 불러오지 못했습니다.", { cause: linkedMakeupsError });
+  }
+
   const assignedIds = new Set(assignments.map((assignment) => assignment.student_id));
-  const attendanceByStudent = new Map<string, AttendanceStatus>();
+  const attendanceByStudent = new Map<string, { id: string; status: AttendanceStatus }>();
   attendanceRecords.forEach((record) => {
-    if (ATTENDANCE_STATUSES.has(record.status as AttendanceStatus)) attendanceByStudent.set(record.student_id, record.status as AttendanceStatus);
+    if (ATTENDANCE_STATUSES.has(record.status as AttendanceStatus)) {
+      attendanceByStudent.set(record.student_id, { id: record.id, status: record.status as AttendanceStatus });
+    }
   });
+  const makeupStatusByAttendance = new Map((linkedMakeups ?? []).map((makeup) => [makeup.attendance_record_id, makeup.status]));
   const assignedStudents = students
     .filter((student) => assignedIds.has(student.id))
-    .map((student) => ({ id: student.id, name: student.nickname, attendanceStatus: attendanceByStudent.get(student.id) ?? null }));
+    .map((student) => {
+      const attendance = attendanceByStudent.get(student.id);
+      return {
+        id: student.id,
+        name: student.nickname,
+        attendanceStatus: attendance?.status ?? null,
+        makeupStatus: attendance ? makeupStatusByAttendance.get(attendance.id) ?? null : null,
+      };
+    });
   const staffProfiles = staff ?? [];
   const activeStaff = staffProfiles.filter((member) => member.is_active);
   const assignedStaffIds = new Set((lessonStaff ?? []).map((entry) => entry.staff_id));
