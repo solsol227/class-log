@@ -52,7 +52,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   const [{ data: assignments, error: assignmentError }, { data: allLessons, error: lessonsError }, { data: programs, error: programsError }] = await Promise.all([
     supabase.from("lesson_assignments").select("lesson_id").eq("student_id", id).is("unassigned_at", null),
     supabase.from("lessons").select("id, title, starts_at, ends_at, status").order("starts_at", { ascending: true }),
-    supabase.from("student_program_statuses").select("student_program_id, program_type, stored_status, effective_status, started_at, ended_at, stop_reason").eq("student_id", id),
+    supabase.from("student_program_statuses").select("student_program_id, program_type, stored_status, effective_status, started_at, ended_at, stop_reason").eq("student_id", id).order("started_at", { ascending: false }),
   ]);
   const assignedLessonIds = new Set(assignments?.map((assignment) => assignment.lesson_id) ?? []);
   const lessons = allLessons?.filter((lesson) => assignedLessonIds.has(lesson.id)) ?? [];
@@ -65,7 +65,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   const notice = notices.created === "1"
     ? "학생이 등록되었습니다."
     : notices.updated === "1"
-      ? "학생 정보를 수정했습니다."
+      ? "학생정보와 이용프로그램을 저장했습니다."
       : notices.assigned === "1"
         ? "일정을 배정했습니다."
       : null;

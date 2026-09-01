@@ -594,3 +594,39 @@ DB/RPC는 정상인데 cache 때문에 일정관리에서 배정이 안 보이�
 
 ### 이유
 실제 운영 규칙상 보강은 사유결석이라는 근거에서 발생해야 한다.
+
+---
+
+## 2026-09-01 — 학생정보와 이용프로그램을 원자 저장
+
+### 결정
+
+학생 기본정보, active 프로그램 중단, stopped 사유 수정, 이용 시작·재개를 하나의 RPC transaction으로 저장한다.
+
+### 이유
+
+profile만 저장되고 program reconciliation이 실패하는 반쪽 상태를 막고, 운영자가 한 편집 화면에서 변경 내용을 확인한 뒤 한 번만 저장하도록 하기 위해서다.
+
+Auth 이메일은 public DB transaction에 포함할 수 없으므로 기존처럼 관리자 API에서 먼저 변경하고, RPC 실패 시 이전 이메일로 보상 복구한다.
+
+## 2026-09-01 — 프로그램 재개는 새 enrollment
+
+### 결정
+
+stopped row는 과거 이력으로 유지하고 이용 재개 시 같은 프로그램의 새 active row를 만든다. accidental stop을 취소해 기존 row를 active로 되살리는 기능은 만들지 않는다.
+
+### 이유
+
+과거 이용기간과 중단 사유를 보존하고 lesson assignment가 참조하는 enrollment 의미를 바꾸지 않기 위해서다.
+
+## 2026-09-01 — 학생 목록 상태는 enrollment에서 계산
+
+### 결정
+
+별도 category 컬럼 없이 `student_programs`와 `student_program_statuses`로 진행중, 휴식, 이용종료를 계산한다. active enrollment 판정을 stopped history보다 우선하며, active row가 모두 effective inactive여도 진행중 탭에 포함하고 행에서 `장기 미배정` 배지와 마지막 배정 경과를 표시한다.
+
+상태 탭과 독립적인 이용프로그램 필터는 active enrollment가 있으면 현재 active 프로그램, 없으면 가장 최근 stopped 이용기간을 기준으로 판정한다. 이름 검색·상태·프로그램 선택은 URL query로 결합한다.
+
+### 이유
+
+여러 프로그램을 가진 학생도 하나의 일관된 목록 상태로 분류하고 저장 상태를 중복 관리하지 않으면서, `active`라는 운영 상태와 장기 미배정이라는 계산 신호를 서로 다른 탭으로 오해하지 않게 하기 위해서다.

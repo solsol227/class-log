@@ -20,6 +20,15 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-09-01 — Codex — 학생정보·이용프로그램 통합 관리
+
+- 한 일: 학생 기본정보, 프로그램 중단, stopped 사유 수정, 이용 시작·재개를 `save_student_profile_and_programs` RPC 한 transaction으로 저장하도록 통합했다.
+- 한 일: 독립 프로그램 추가·중단 UI/action을 제거하고 학생정보 `수정 → 저장/취소` 안에서 active 중단일·사유, stopped history 사유, 새 이용기간 시작일을 함께 편집하도록 변경했다.
+- 한 일: 학생 목록을 이름 검색 + 독립 이용프로그램 필터 + 전체·진행중·휴식·이용종료 상태 탭으로 정리하고 모든 조건을 URL query로 유지했다. 장기 미배정은 별도 탭 대신 진행중 행 배지와 마지막 배정 경과로 표시한다.
+- 확인된 것: 학생 10명, enrollment 10건에서 active 중복·assignment 연결 누락·program 불일치·stopped enrollment 활성 참조가 없었다. 저장 active 기준 진행중은 9명이며 그중 effective inactive 1명은 장기 미배정 배지로 구분되고, 휴식은 1명이다.
+- 확인된 것: rollback 원격 검증에서 stopped 이력 보존+새 active 재개, 중단 사유 수정, active 중복 차단, 미래 배정 중단 실패 시 profile까지 전체 rollback을 확인했다. 검증 row는 남지 않았다.
+- 다음 할 일: production UI에서 통합 저장과 학생 목록 필터를 사용자 확인한다. 승인 전 commit/push/PR/merge하지 않는다.
+
 ## 2026-09-01 — Codex — PR #19 사유결석 기반 보강 구현
 
 - 한 일: excused 출결과 `makeup_lessons`를 필수 UNIQUE FK로 연결하고, replacement 출결·assignment provenance·operator event history를 추가한 append-only migration을 원격에 적용했다.
