@@ -22,6 +22,7 @@ type ProfileFieldErrors = {
   acquisitionSource?: string;
   phone?: string;
   joinedMonth?: string;
+  programs?: string;
 };
 
 export type StudentProfileActionState = {
@@ -37,14 +38,59 @@ export type StudentAssignmentActionState = {
   formError?: string;
 };
 
-export type StudentProgramActionState = { formError?: string };
-
 const PROGRAM_TYPES = ["weekday_vocal", "weekend_vocal", "rental", "trial"] as const;
 const STOP_REASONS = ["break", "ended", "other"] as const;
 const ACQUISITION_SOURCES = ["instagram", "daangn", "referral", "naver"] as const;
 
 function optionalText(value: FormDataEntryValue | null) {
   return String(value ?? "").trim() || null;
+}
+
+function isValidDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+type ProgramChanges = {
+  stop: Array<{ id: string; endedAt: string; stopReason: string | null }>;
+  start: Array<{ programType: string; startedAt: string }>;
+  reasonUpdates: Array<{ id: string; stopReason: string | null }>;
+};
+
+function parseProgramChanges(value: FormDataEntryValue | null): ProgramChanges | null {
+  try {
+    const parsed = JSON.parse(String(value ?? "")) as Partial<ProgramChanges>;
+    if (!Array.isArray(parsed.stop) || !Array.isArray(parsed.start) || !Array.isArray(parsed.reasonUpdates)) return null;
+    if (parsed.stop.length > 4 || parsed.start.length > 4 || parsed.reasonUpdates.length > 100) return null;
+
+    const stop = parsed.stop.map((item) => ({
+      id: String(item?.id ?? ""),
+      endedAt: String(item?.endedAt ?? ""),
+      stopReason: item?.stopReason ? String(item.stopReason) : null,
+    }));
+    const start = parsed.start.map((item) => ({
+      programType: String(item?.programType ?? ""),
+      startedAt: String(item?.startedAt ?? ""),
+    }));
+    const reasonUpdates = parsed.reasonUpdates.map((item) => ({
+      id: String(item?.id ?? ""),
+      stopReason: item?.stopReason ? String(item.stopReason) : null,
+    }));
+
+    if (stop.some((item) => !UUID_PATTERN.test(item.id) || !isValidDate(item.endedAt) || (item.stopReason && !STOP_REASONS.includes(item.stopReason as (typeof STOP_REASONS)[number])))) return null;
+    if (start.some((item) => !PROGRAM_TYPES.includes(item.programType as (typeof PROGRAM_TYPES)[number]) || !isValidDate(item.startedAt))) return null;
+    if (reasonUpdates.some((item) => !UUID_PATTERN.test(item.id) || (item.stopReason && !STOP_REASONS.includes(item.stopReason as (typeof STOP_REASONS)[number])))) return null;
+
+    const stopIds = stop.map((item) => item.id);
+    const reasonIds = reasonUpdates.map((item) => item.id);
+    const startTypes = start.map((item) => item.programType);
+    if (new Set(stopIds).size !== stopIds.length || new Set(reasonIds).size !== reasonIds.length || new Set(startTypes).size !== startTypes.length) return null;
+    if (stopIds.some((id) => reasonIds.includes(id))) return null;
+    return { stop, start, reasonUpdates };
+  } catch {
+    return null;
+  }
 }
 
 export async function assignScheduleToStudent(
@@ -111,6 +157,7 @@ export async function updateStudentProfile(
   const acquisitionSource = optionalText(formData.get("acquisition_source"));
   const joinedMonthInput = String(formData.get("joined_month") ?? "").trim();
   const specialNotes = optionalText(formData.get("special_notes"));
+  const programChanges = parseProgramChanges(formData.get("program_changes"));
   let name = "";
 
   try {
@@ -136,6 +183,9 @@ export async function updateStudentProfile(
   }
   if (acquisitionSource && !ACQUISITION_SOURCES.includes(acquisitionSource as (typeof ACQUISITION_SOURCES)[number])) {
     fieldErrors.acquisitionSource = "유입경로를 다시 선택해 주세요.";
+  }
+  if (!programChanges) {
+    fieldErrors.programs = "이용프로그램 변경 내용을 다시 확인해 주세요.";
   }
 
   let joinedMonth: string | null = null;
@@ -209,23 +259,25 @@ export async function updateStudentProfile(
     }
   }
 
-  const { data: updated, error: updateError } = await supabase
-    .from("students")
-    .update({
-      nickname: name,
-      gender,
-      age,
-      phone,
-      acquisition_source: acquisitionSource,
-      joined_month: joinedMonth,
-      special_notes: specialNotes,
-    })
-    .eq("id", studentId)
-    .eq("auth_user_id", student.auth_user_id)
-    .select("id")
-    .maybeSingle();
+  const { data: updated, error: updateError } = await supabase.rpc(
+    "save_student_profile_and_programs",
+    {
+      target_student_id: studentId,
+      profile_nickname: name,
+      profile_gender: gender,
+      profile_age: age,
+      profile_phone: phone,
+      profile_acquisition_source: acquisitionSource,
+      profile_joined_month: joinedMonth,
+      profile_special_notes: specialNotes,
+      program_changes: programChanges,
+    },
+  );
 
-  if (updateError || !updated) {
+  const result = updated && typeof updated === "object" && !Array.isArray(updated)
+    ? updated as Record<string, unknown>
+    : null;
+  if (updateError || result?.studentId !== studentId || result.profileUpdated !== true) {
     if (updateError) console.error(updateError);
     if (nameChanged) {
       const { error: rollbackError } = await adminClient.auth.admin.updateUserById(
@@ -234,50 +286,22 @@ export async function updateStudentProfile(
       );
       if (rollbackError) console.error("학생 로그인 정보 복구에 실패했습니다.", rollbackError);
     }
-    return { fieldErrors: {}, formError: "학생 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    const formError = updateError?.code === "23505"
+      ? "이미 이용 중인 프로그램이 있거나 같은 이름의 학생이 있습니다. 내용을 다시 확인해 주세요."
+      : updateError?.code === "23514"
+        ? "프로그램 중단일을 확인해 주세요. 미래 일정 배정이 남아 있다면 해당 배정을 먼저 해제해야 합니다."
+        : updateError?.code === "P0002"
+          ? "학생 또는 프로그램 정보가 변경되었습니다. 새로고침 후 다시 시도해 주세요."
+          : "학생정보와 이용프로그램을 저장하지 못했습니다. 변경 내용은 반영되지 않았습니다.";
+    return { fieldErrors: {}, formError };
   }
 
   revalidatePath("/operator/students");
   revalidatePath(`/operator/students/${studentId}`);
   revalidatePath("/operator/schedules");
+  revalidatePath("/operator/schedules/new");
+  revalidatePath("/student/schedule");
   redirect(`/operator/students/${studentId}?updated=1`);
-}
-
-export async function addStudentProgram(
-  studentId: string,
-  _previousState: StudentProgramActionState,
-  formData: FormData,
-): Promise<StudentProgramActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
-  const programType = String(formData.get("program_type") ?? "");
-  const startedAt = String(formData.get("started_at") ?? "");
-  if (!UUID_PATTERN.test(studentId) || !PROGRAM_TYPES.includes(programType as (typeof PROGRAM_TYPES)[number]) || !/^\d{4}-\d{2}-\d{2}$/.test(startedAt)) {
-    return { formError: "프로그램과 시작일을 확인해 주세요." };
-  }
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from("student_programs").insert({ student_id: studentId, program_type: programType, started_at: startedAt }).select("id").maybeSingle();
-  if (error || !data) return { formError: error?.code === "23505" ? "이미 이용 중인 프로그램입니다." : "프로그램을 추가하지 못했습니다." };
-  revalidatePath(`/operator/students/${studentId}`);
-  redirect(`/operator/students/${studentId}?programUpdated=1`);
-}
-
-export async function stopStudentProgram(
-  studentId: string,
-  programId: string,
-  _previousState: StudentProgramActionState,
-  formData: FormData,
-): Promise<StudentProgramActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
-  const stopReason = String(formData.get("stop_reason") ?? "") || null;
-  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(programId) || (stopReason && !STOP_REASONS.includes(stopReason as (typeof STOP_REASONS)[number]))) {
-    return { formError: "프로그램 정보를 확인해 주세요." };
-  }
-  const endedAt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.from("student_programs").update({ status: "stopped", stop_reason: stopReason, ended_at: endedAt }).eq("id", programId).eq("student_id", studentId).eq("status", "active").select("id").maybeSingle();
-  if (error || !data) return { formError: error?.code === "23514" ? "미래 일정 배정을 먼저 해제한 뒤 프로그램을 중단해 주세요." : "프로그램을 중단하지 못했습니다." };
-  revalidatePath(`/operator/students/${studentId}`);
-  redirect(`/operator/students/${studentId}?programUpdated=1`);
 }
 
 export async function deleteStudent(

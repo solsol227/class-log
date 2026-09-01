@@ -2,11 +2,11 @@
 
 ## 현재 기준
 
-- PR #19 구현 브랜치: `feat/excused-makeup-workflow`
-- 기준 main commit: `8568c7e111ebe87603633d30b3e8bdd2b8333fdb`
-- migration local/remote 24개 일치
-- PR #18 merge 완료
-- PR #19 구현·검증 진행 중, 아직 미커밋
+- 구현 브랜치: `feat/student-program-management`
+- 기준 main commit: `d8c01137855a37f7523ee54501df4336fd80152e`
+- migration local/remote 25개 일치
+- PR #19 merge 완료
+- 학생정보·이용프로그램 통합 관리 구현·검증 진행 중, 아직 미커밋
 
 ## 완료 — PR #15 보안 hardening
 
@@ -88,7 +88,7 @@
 - [x] 학생 내 일정 담당 직원 표시
 - [x] 운영자 브라우저 mutation 확인
 
-## 구현 중 — PR #19 사유결석 기반 보강
+## 완료 — PR #19 사유결석 기반 보강
 
 목표:
 `사유결석 → 보강 가능 건 → 보강 대기 → 일정 배정 → 완료`
@@ -116,7 +116,23 @@
 - [x] 사유결석 기반 대기/예정/완료/취소 화면
 - [x] 기존 데이터 0건 확인 후 append-only migration 적용
 - [x] local/remote migration history 및 DB lint 확인
-- [ ] Docker 없는 환경의 pgTAP 원격 실행 대체 또는 사용자 브라우저 확인
+- [x] rollback 기반 원격 RPC 검증과 사용자 브라우저 확인
+
+## 구현 중 — 학생정보·이용프로그램 통합 관리
+
+- [x] 실제 enrollment/assignment/view 상태 조사
+- [x] profile과 program reconciliation 단일 RPC transaction
+- [x] active 프로그램 중단일·사유 입력
+- [x] stopped 이력 및 중단 사유 수정
+- [x] 재개 시 새 active enrollment 생성
+- [x] 미래 활성 배정이 있는 프로그램 중단 차단
+- [x] 독립 이용프로그램 추가·중단 action/UI 제거
+- [x] 전체/진행중/휴식/이용종료 URL 상태 필터
+- [x] 학생 이름 검색과 독립 이용프로그램 URL 필터
+- [x] 진행중 안의 장기 미배정 배지와 마지막 배정 경과 표시
+- [x] operator/student RLS 구조 유지
+- [x] rollback 기반 원격 RPC 검증
+- [ ] 사용자 production UI 확인
 
 ## 다음 핵심 기능 — 학생 일정 상세
 

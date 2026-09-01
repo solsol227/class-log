@@ -5,11 +5,11 @@
 
 ## 현재 기준
 
-- 구현 브랜치: `feat/excused-makeup-workflow`
-- 기준 main commit: `8568c7e111ebe87603633d30b3e8bdd2b8333fdb`
-- PR #18 운영 UX 개선 merge 완료
-- local/remote migration: 24개 일치
-- PR #19 신규 migration: `20260901000000_add_excused_makeup_workflow.sql`, `20260901010000_protect_scheduled_makeup_assignments.sql`, `20260901020000_automate_makeup_lifecycle.sql`, `20260901030000_fix_makeup_event_cause.sql`
+- 구현 브랜치: `feat/student-program-management`
+- 기준 main commit: `d8c01137855a37f7523ee54501df4336fd80152e`
+- PR #19 사유결석 기반 보강 merge 완료
+- local/remote migration: 25개 일치
+- 이번 작업 신규 migration: `20260901040000_add_atomic_student_program_management.sql`
 
 ## 1. 학생
 
@@ -59,6 +59,24 @@
 
 같은 학생+프로그램의 active enrollment는 동시에 한 건만 허용한다.
 `inactive`는 저장하지 않고 `student_program_statuses` view에서 계산한다.
+
+학생 기본정보와 이용프로그램 변경은 `save_student_profile_and_programs` RPC에서 한 transaction으로 저장한다.
+
+- active 중단: 기존 row를 `stopped`로 바꾸고 중단일·사유를 기록한다.
+- 이용 재개: stopped row를 되살리지 않고 새 active row를 만든다.
+- stopped 사유 수정: 기존 history row의 사유만 수정한다.
+- 미래 활성 일정 배정이 있는 enrollment는 중단할 수 없다.
+- profile 또는 program 변경 하나라도 실패하면 public DB 변경 전체를 rollback한다.
+
+학생 목록 상태와 이용프로그램 필터는 저장 컬럼을 추가하지 않고 enrollment/view로 계산한다.
+
+- 진행중 탭: 저장 상태가 active인 enrollment가 하나 이상인 모든 학생
+- 진행중 배지: active enrollment 중 effective active가 하나 이상
+- 장기 미배정 배지: active enrollment는 있으나 모두 effective inactive. 별도 상태 탭으로 분리하지 않는다.
+- 휴식: active enrollment가 없고 가장 최근 stopped 이용기간 중 사유가 `break`
+- 이용종료: active enrollment가 없고 가장 최근 stopped 이용기간이 `ended` 또는 `other`. 프로그램 이력이 없는 학생도 목록에서 누락되지 않도록 이 탭에 포함하되 `프로그램 미등록` 배지를 표시한다.
+- 프로그램 필터: active enrollment가 있으면 현재 active 프로그램, 없으면 가장 최근 stopped 이용기간의 프로그램을 기준으로 판정한다.
+- 검색어·상태·프로그램 필터는 URL query로 함께 유지한다.
 
 ## 3. 일정
 
