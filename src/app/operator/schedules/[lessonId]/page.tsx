@@ -145,7 +145,10 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
-      <Link href="/operator/schedules" className="font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">일정 목록</Link>
+      <nav aria-label="일정 상세 이동" className="flex flex-wrap items-center justify-between gap-3">
+        <Link href="/operator/schedules" className="font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">일정 목록</Link>
+        <Link href="/operator/schedules/new" className="inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] bg-white px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">새 일정 등록</Link>
+      </nav>
       {notice ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">{notice}</p> : null}
       {errorNotice ? <p role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-bold text-rose-900">{errorNotice}</p> : null}
       <ScheduleDashboard

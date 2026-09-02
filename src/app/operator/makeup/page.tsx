@@ -174,8 +174,16 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
               return (
                 <li key={item.id} className="rounded-xl border border-[var(--line)] bg-white p-4">
                   <p className="font-bold">{studentName(item.student_id)}</p>
-                  <p className="mt-1 text-sm">원수업: {lessonTitle(item.original_lesson_id)}</p>
-                  {originalLesson ? <p className="mt-1 text-sm text-[var(--muted)]">발생일: {formatDateTime(originalLesson.starts_at)}</p> : null}
+                  <Link
+                    href={`/operator/schedules/${item.original_lesson_id}`}
+                    className="group mt-3 flex items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[#f8fbfa] p-3 transition hover:border-[#a9c8c4] hover:bg-white hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold">원수업: {lessonTitle(item.original_lesson_id)}</span>
+                      {originalLesson ? <span className="mt-1 block text-sm text-[var(--muted)]">발생일: {formatDateTime(originalLesson.starts_at)}</span> : null}
+                    </span>
+                    <span aria-hidden="true" className="shrink-0 text-lg font-bold text-[var(--accent-strong)] transition group-hover:translate-x-0.5">→</span>
+                  </Link>
                   <p className="mt-1 text-sm text-[var(--muted)]">
                     근거 출결: {sourceStatus ? ATTENDANCE_LABELS[sourceStatus] ?? sourceStatus : "확인 불가"}
                   </p>

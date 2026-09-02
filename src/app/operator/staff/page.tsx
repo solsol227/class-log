@@ -71,21 +71,21 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
                 <span>{member.display_name}</span>
                 <span>상세 보기 →</span>
               </Link>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)_auto] sm:items-center">
-                <form action={updateStaff.bind(null, member.id)} className="contents">
+              <form id={`staff-update-${member.id}`} action={updateStaff.bind(null, member.id)} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)] sm:items-center">
                   <input name="display_name" defaultValue={member.display_name} required className="h-11 rounded-xl border border-[#9badaa] px-3" />
                   <select name="role" defaultValue={member.role} required className="h-11 rounded-xl border border-[#9badaa] bg-white px-3">
                     <option value="manager">매니저</option>
                     <option value="vocal_trainer">보컬트레이너</option>
                   </select>
-                  <button className="h-11 rounded-xl border border-[var(--accent)] px-4 font-bold">저장</button>
+              </form>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="submit" form={`staff-update-${member.id}`} className="min-h-11 min-w-0 rounded-xl bg-[var(--accent)] px-3 font-bold text-white transition hover:bg-[var(--accent-strong)]">저장</button>
+                <form action={deleteStaff.bind(null, member.id)} className="min-w-0">
+                  <ConfirmSubmitButton message="이 직원을 삭제할까요? 직원 정보와 과거 기록은 보존되며 삭제된 직원으로 이동합니다." className="min-h-11 w-full min-w-0 rounded-xl border border-rose-300 bg-white px-3 font-bold text-rose-800 transition hover:bg-rose-50">
+                    삭제
+                  </ConfirmSubmitButton>
                 </form>
               </div>
-              <form action={deleteStaff.bind(null, member.id)} className="mt-3 flex justify-end">
-                <ConfirmSubmitButton message="이 직원을 삭제할까요? 직원 정보와 과거 기록은 보존되며 삭제된 직원으로 이동합니다." className="h-10 rounded-xl border border-rose-300 px-4 font-bold text-rose-800">
-                  삭제
-                </ConfirmSubmitButton>
-              </form>
             </li>
           ))}
         </ul>
