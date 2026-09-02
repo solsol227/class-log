@@ -20,6 +20,14 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-09-02 — Codex — PR #21 운영 화면 UX 개선
+
+- 한 일: 학생 신규 등록의 현재 입력 비밀번호를 포인터 또는 키보드로 누르는 동안만 표시하고, release/leave/cancel/blur에서 즉시 숨기는 접근 가능한 보기 버튼을 추가했다.
+- 한 일: 일정관리 목록에 전체·예정·완료·Draft·취소 URL query 필터와 display status 기준 count/빈 상태를 추가하고, 일정 상세에 보조 계층의 새 일정 등록 링크를 추가했다.
+- 한 일: 직원 저장/삭제를 독립 form 상태로 한 줄 배치하고, 보강 원수업 정보 sub-card 전체를 일정 상세 링크로 만들었다.
+- 확인된 것: DB schema, migration, RPC, RLS, 데이터 query 및 mutation action은 변경하지 않았으며 ESLint, TypeScript, production build를 통과했다.
+- 다음 할 일: production UI에서 포인터·키보드 비밀번호 보기, 일정 필터/빈 상태, 직원 버튼, 원수업 링크를 사용자 확인한다.
+
 ## 2026-09-01 — Codex — 학생정보·이용프로그램 통합 관리
 
 - 한 일: 학생 기본정보, 프로그램 중단, stopped 사유 수정, 이용 시작·재개를 `save_student_profile_and_programs` RPC 한 transaction으로 저장하도록 통합했다.
