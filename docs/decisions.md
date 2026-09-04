@@ -6,6 +6,60 @@
 
 ---
 
+## 2026-09-04 — 잠금 순서·단일 배정·인증 연결 장애
+
+- 다중 학생 잠금은 학생 UUID 오름차순으로 통일한다. 원격 두 세션에서 기존 확정/저장 deadlock을 재현했고 순서 통일 후 양쪽 RPC 완료와 데이터 rollback을 확인했다.
+- 한 학생 추가 배정은 전용 RPC로 처리한다. 조회 후 전체 명단 저장은 다른 요청의 배정을 덮어쓸 수 있으므로 lesson row lock 아래 해당 학생만 변경한다.
+- Draft 비노출은 학생용 집계에도 적용한다. 학생 화면의 Draft 개수와 Draft 전용 월 노출을 차단한다.
+- Supabase 연결 실패·서버 장애·요청 제한은 세션 무효의 증거가 아니다. 역할 API는 503, 보호 경로는 일시 오류 안내를 사용하고 쿠키를 보존한다. 실제 무효 세션과 역할 위반은 계속 거부한다.
+
+---
+
+## 2026-09-02 — lesson은 프로그램이 없는 중립 일정
+
+### 결정
+
+- 프로그램 종류는 `student_programs`에만 둔다.
+- `lesson_assignments.student_program_id`는 해당 참여가 사용하는 이용권이다.
+- `lessons.program_type`과 exact-match 검증은 제거한다.
+- `assignment_purpose`는 추가하지 않는다.
+
+### 이유
+
+한 lesson에서 평일보컬·주말보컬·체험 등 서로 다른 이용권을 사용하는 학생이 함께 참여할 수 있다. 프로그램은 일정 분류가 아니라 학생별 이용권이므로 assignment가 귀속을 표현하는 것이 중복과 예외가 가장 적다.
+
+이 결정은 아래의 “lesson 하나는 하나의 프로그램”, “rental은 lesson에서 분리”, “기존 lesson은 weekday_vocal로 backfill” 결정을 대체한다. 과거 결정은 당시 구현 배경 기록으로 남긴다.
+
+---
+
+## 2026-09-02 — 일반 이용량은 확정 assignment에서 계산
+
+### 결정
+
+- Draft assignment는 차감하지 않는다.
+- Scheduled 확정 시점부터 예약/사용량에 포함한다.
+- 시작 전이며 attendance/feedback이 없는 경우만 soft-unassign 또는 취소로 반환한다.
+- 기본 제공량 이후 증감은 append-only adjustment로 기록한다.
+- 일반 차감 ledger나 `assignment_purpose`는 만들지 않는다.
+
+### 이유
+
+현재 assignment가 이미 “어느 이용권으로 어느 일정에 참여하는가”를 표현한다. 일반 사용 기록을 별도 row로 중복하면 상태 동기화가 필요하므로, DB lock 아래 확정 assignment를 집계하는 편이 단순하고 일관된다.
+
+---
+
+## 2026-09-02 — 보강은 source enrollment의 독립 1회 권리
+
+### 결정
+
+사유결석 시 원 assignment의 `student_program_id`를 `makeup_lessons.source_student_program_id`로 고정한다. 원 일반 이용 횟수는 반환하지 않고 보강권 1회를 별도로 생성한다. source enrollment가 stopped가 되어도 권리를 유지하며 replacement 월과 무관하게 사용할 수 있다.
+
+### 이유
+
+보강은 다음 달 일반 한도를 늘리는 adjustment가 아니라 특정 사유결석에서 발생한 1회성 권리다. source enrollment snapshot을 보존해야 중단·재등록 뒤에도 어느 이용기간에서 발생한 권리인지 바뀌지 않는다.
+
+---
+
 ## 2026-09 — 사유결석 한 건은 하나의 보강 workflow를 만든다
 
 ### 결정

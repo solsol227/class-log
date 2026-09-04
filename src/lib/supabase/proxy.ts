@@ -5,7 +5,7 @@ import {
   ROLE_HOME_PATHS,
   type AppRole,
 } from "@/lib/auth/roles";
-import type { AuthNotice } from "@/lib/auth/errors";
+import { isAuthServiceUnavailable, type AuthNotice } from "@/lib/auth/errors";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 const protectedRoutes = [
@@ -67,6 +67,12 @@ export async function updateSupabaseSession(request: NextRequest) {
   }
 
   if (error || !data?.claims) {
+    if (isAuthServiceUnavailable(error)) {
+      return redirectWithCookies(
+        request, response, protectedRoute.loginPath, "auth-unavailable",
+      );
+    }
+
     if (hadAuthCookie) {
       await supabase.auth.signOut();
     }

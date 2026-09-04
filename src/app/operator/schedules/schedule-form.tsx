@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useLayoutEffect, useRef, useState } from "react";
+import { useActionState, useLayoutEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { createSchedule, updateSchedule, type ScheduleActionState } from "./actions";
 import { ScheduleDateTimeFields, type ScheduleDateTimeFieldsHandle } from "./schedule-date-time-fields";
@@ -14,8 +14,7 @@ type ScheduleValues = {
   endTime: string;
   location: string;
   notes: string;
-  studentIds?: string[];
-  programType?: string;
+  studentProgramIds?: string[];
   status?: string;
 };
 
@@ -38,18 +37,14 @@ export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel
   const [state, formAction] = useActionState(action, INITIAL_STATE);
   const dateTimeFieldsRef = useRef<ScheduleDateTimeFieldsHandle>(null);
   const values = state.values ?? initialValues;
-  const [programType, setProgramType] = useState(values?.programType ?? "weekday_vocal");
   const dateTimeKey = `${values?.date ?? ""}|${values?.startTime ?? ""}|${values?.endTime ?? ""}`;
-  const programStudents = students?.filter((student) => student.programTypes?.includes(programType));
-  const programStudentIds = new Set(programStudents?.map((student) => student.id));
-  const selectedProgramStudentIds = values?.studentIds?.filter((studentId) => programStudentIds.has(studentId));
 
   return (
     <form id={formId} action={formAction} onSubmit={(event) => { if (dateTimeFieldsRef.current && !dateTimeFieldsRef.current.validate()) event.preventDefault(); }} className="space-y-5" noValidate>
       {state.formError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{state.formError}</p> : null}
       <FormInput id="schedule-title" label="제목" name="title" defaultValue={values?.title} error={state.fieldErrors.title} />
-      <div><label htmlFor="schedule-program" className="mb-2 block text-sm font-bold">프로그램</label><select id="schedule-program" name="program_type" value={programType} onChange={(event) => setProgramType(event.target.value)} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4"><option value="weekday_vocal">평일보컬</option><option value="weekend_vocal">주말보컬</option><option value="trial">체험</option></select>{state.fieldErrors.program ? <p className="mt-2 text-sm font-semibold text-rose-800">{state.fieldErrors.program}</p> : null}</div>
       <div><label htmlFor="schedule-status" className="mb-2 block text-sm font-bold">저장 상태</label><select id="schedule-status" name="status" defaultValue={values?.status === "draft" ? "draft" : "scheduled"} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4"><option value="scheduled">확정 일정</option><option value="draft">Draft</option></select></div>
+      <p className="rounded-xl bg-[#f4f8f7] px-4 py-3 text-sm text-[var(--muted)]">Draft 배정은 이용 횟수에 포함되지 않으며, 확정할 때 이용권을 검증합니다.</p>
       <ScheduleDateTimeFields ref={dateTimeFieldsRef} key={dateTimeKey} initialDate={values?.date} initialStartTime={values?.startTime} initialEndTime={values?.endTime} dateError={state.fieldErrors.date} startError={state.fieldErrors.startsAt} endError={state.fieldErrors.endsAt} />
       <div>
         <label htmlFor="schedule-location" className="mb-2 block text-sm font-bold">장소 선택 (선택)</label>
@@ -60,7 +55,7 @@ export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel
         <label htmlFor="schedule-notes" className="mb-2 block text-sm font-bold">메모 (선택)</label>
         <AutoResizeTextarea id="schedule-notes" name="notes" defaultValue={values?.notes} />
       </div>
-      {programStudents ? <StudentMultiSelectField key={`${programType}|${(selectedProgramStudentIds ?? []).join(",")}`} students={programStudents} initialSelectedIds={selectedProgramStudentIds} error={state.fieldErrors.students} /> : null}
+      {students ? <StudentMultiSelectField key={(values?.studentProgramIds ?? []).join(",")} students={students} initialSelectedProgramIds={values?.studentProgramIds} error={state.fieldErrors.students} /> : null}
       <FormActions mode={mode} onCancel={onCancel} />
     </form>
   );

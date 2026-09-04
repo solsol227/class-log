@@ -6,7 +6,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ROLE_LABELS: Record<string, string> = { manager: "매니저", vocal_trainer: "보컬트레이너" };
-const PROGRAM_LABELS: Record<string, string> = { weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험" };
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -64,7 +63,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ st
   const studentIds = [...new Set(feedbackResult.data.map((entry) => entry.student_id))];
   const [lessonsResult, studentsResult] = await Promise.all([
     lessonIds.length
-      ? supabase.from("lessons").select("id, title, starts_at, ends_at, program_type, status").in("id", lessonIds)
+      ? supabase.from("lessons").select("id, title, starts_at, ends_at, status").in("id", lessonIds)
       : Promise.resolve({ data: [], error: null }),
     studentIds.length
       ? supabase.from("students").select("id, nickname").in("id", studentIds)
@@ -99,7 +98,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ st
                 <span className="text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(entry.lesson.status, entry.lesson.ends_at, requestTime)}</span>
               </span>
               <span className="mt-2 block text-sm text-[var(--muted)]">{formatDateTime(entry.lesson.starts_at)} ~ {formatDateTime(entry.lesson.ends_at)}</span>
-              <span className="mt-2 block text-sm">{PROGRAM_LABELS[entry.lesson.program_type] ?? entry.lesson.program_type} · 당시 역할 {ROLE_LABELS[entry.role] ?? entry.role}</span>
+              <span className="mt-2 block text-sm">당시 역할 {ROLE_LABELS[entry.role] ?? entry.role}</span>
             </Link>
           </li>
         ))}

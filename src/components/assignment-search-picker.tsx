@@ -21,6 +21,11 @@ type AssignmentSearchPickerProps = {
   formError?: string;
   emptyMessage?: string;
   submitLabel: string;
+  secondarySelect?: {
+    name: string;
+    label: string;
+    options: Array<{ value: string; label: string }>;
+  };
 };
 
 function normalizeSearch(value: string) {
@@ -51,6 +56,7 @@ export function AssignmentSearchPicker({
   formError,
   emptyMessage = "검색 결과가 없습니다.",
   submitLabel,
+  secondarySelect,
 }: AssignmentSearchPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -111,12 +117,13 @@ export function AssignmentSearchPicker({
             {filteredOptions.length === 0 ? (
               <p className="px-2 py-4 text-sm text-[var(--muted)]">{emptyMessage}</p>
             ) : filteredOptions.map((option) => (
-              <form key={option.value} action={formAction} className="flex items-center gap-3 rounded-xl border border-[var(--line)] p-3">
+              <form key={option.value} action={formAction} className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--line)] p-3">
                 <input type="hidden" name={inputName} value={option.value} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold">{option.label}</p>
                   {option.detail ? <p className="mt-1 text-sm text-[var(--muted)]">{option.detail}</p> : null}
                 </div>
+                {secondarySelect && !option.disabled ? <label className="w-full text-xs font-bold">{secondarySelect.label}<select name={secondarySelect.name} required className="mt-1 h-10 w-full rounded-lg border border-[#9badaa] bg-white px-2 text-sm font-normal">{secondarySelect.options.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label> : null}
                 {option.disabled ? (
                   <span className="shrink-0 text-sm font-bold text-[var(--muted)]">{option.disabledLabel ?? "배정됨"}</span>
                 ) : <AssignButton label={submitLabel} />}
