@@ -319,18 +319,17 @@ RLS 재귀 방지를 위해 `private` schema의 security-definer helper를 사�
 - `monthly_activity_items.student_id`
 - `monthly_activity_items.position`
 
-## 14. 후속 구조
+## 14. 학생 일정 상세와 피드백 아카이브
 
-### 학생 일정 상세
-학생의 `내 일정`에서 일정 클릭 → 상세 페이지.
+`/student/schedule/[lessonId]`는 학생 RLS가 허용한 active assignment의 비-Draft 일정만 표시한다. 일정 내부 메모와 직원 인증 정보는 조회하지 않으며, 본인 출결과 게시·미삭제 피드백 및 그 댓글만 bounded query로 읽는다.
 
-표시 후보:
-- 일정 정보
-- 담당자
-- 본인 출결
-- 게시된 피드백
-- 댓글/답글
+PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 컬럼이 아닌 학생 본인의 active assignment에 연결된 `student_programs.program_type`에서 조회한다.
 
-### 기타 후속
+피드백 제공 직원 표시는 `get_student_feedback_authors(uuid[])`가 담당한다. 이 함수는 `private.student_can_view_feedback()`을 통과한 최대 200개 피드백에 대해서만 `feedback_id`, 직원 등록 이름, 역할을 반환하며 직원 ID나 `auth_user_id`는 반환하지 않는다. 댓글 작성자도 같은 접근 판정을 사용하는 `get_student_feedback_comment_authors(uuid[])`가 댓글 ID와 안전한 표시 이름만 반환한다.
+
+`/student/feedback` 기간 기준은 `lessons.starts_at`의 KST calendar date다. URL은 빠른 기간에 `range=all|1m|3m|6m&sort=asc|desc`, 직접 기간에 `range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD&sort=asc|desc`를 사용한다.
+
+## 15. 후속 구조
+
 - 학생 계정 관리 전용 페이지
 - `rental_reservations`

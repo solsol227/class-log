@@ -23,6 +23,7 @@ export async function createFeedback(lessonId: string, formData: FormData) {
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
   revalidatePath("/student/feedback");
+  revalidatePath(`/student/schedule/${lessonId}`);
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }
 
@@ -36,6 +37,7 @@ export async function updateFeedback(lessonId: string, feedbackId: string, formD
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
   revalidatePath("/student/feedback");
+  revalidatePath(`/student/schedule/${lessonId}`);
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }
 
@@ -47,6 +49,7 @@ export async function deleteFeedback(lessonId: string, feedbackId: string) {
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
   revalidatePath("/student/feedback");
+  revalidatePath(`/student/schedule/${lessonId}`);
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }
 
@@ -60,5 +63,6 @@ export async function addOperatorComment(lessonId: string, feedbackId: string, f
   if (error || !data) feedbackError(lessonId);
   revalidatePath(`/operator/schedules/${lessonId}`);
   revalidatePath("/student/feedback");
+  revalidatePath(`/student/schedule/${lessonId}`);
   redirect(`/operator/schedules/${lessonId}?feedbackUpdated=1`);
 }

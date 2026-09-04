@@ -20,6 +20,18 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-09-04 — Codex — PR #23 Final Review 및 병합 승인
+
+- 한 일: 사용자 UI 확인과 커밋·푸시·병합 승인을 받았다. 최신 origin/main `b95ac71` 포함 여부와 전체 변경을 최종 리뷰했다. GitHub PR은 아직 없어 push 후 생성하며 일반 merge로 마무리한다.
+- 확인된 것: 직전 최종 코드의 production build/TypeScript, ESLint, 보강 조건 렌더링 4건 검증 결과를 유지한다. 학생 본인 active assignment, Draft 차단, 게시·미삭제 필터, 최소 작성자 RPC 반환값 및 세 화면 revalidation 경로를 재확인했다. migration 31건의 local/remote 일치를 재확인했다.
+- 제한: 실데이터 부재로 자동 댓글 저장·작성자 표시 양성 E2E는 검증하지 않았다. 아카이브는 일정·피드백 200건, 댓글 1,000건 조회 상한이 있으며 pagination을 후속으로 남긴다. 사용자 확인을 자동 E2E 통과로 간주하지 않는다.
+
+## 2026-09-04 — Codex — 학생 이용권 보강 수치 조건부 표시
+
+- 한 일: 학생 내 일정의 이용권 카드에서 보강 대기·예정 중 하나라도 0보다 클 때만 보강 줄을 표시한다. 생성 전과 완료·취소 후 두 수치가 모두 0이면 숨기며, 보강의 `예약` 라벨을 `예정`으로 구분했다.
+- 범위: 기존 본인 집계 RPC를 그대로 사용한다. DB/RLS/migration과 일반 이용 횟수 계산은 변경하지 않았다.
+- 확인된 것: 실제 JSX의 0/0·1/0·0/1·1/1 렌더링 조건 4건, 해당 파일 ESLint, production build/TypeScript, `git diff --check` 통과. 직접 확인용 production 빌드를 갱신했다.
+
 ## 2026-09-04 — Codex — 동시성·로컬 로그인 수정 및 최종 리뷰
 
 - 한 일: 기존 미커밋 변경을 보존하고 append-only migration 2건을 추가했다. 적용된 기존 migration은 수정하지 않았다. 확정 RPC의 학생 잠금 순서를 저장 RPC와 통일하고, 학생 상세의 단일 추가 배정을 전용 RPC로 바꿨으며 학생용 Draft 개수·Draft 전용 월 노출을 차단했다.
@@ -46,6 +58,24 @@
 - 확인된 것: `npx tsc --noEmit`, ESLint, production build가 통과했다. 로컬 Supabase CLI/config가 없어 migration 실제 적용과 DB lint는 아직 수행하지 못했다.
 - 다음 할 일 / 막힌 것: 연결 DB에서 preflight를 다시 확인한 뒤 migration 적용, pgTAP, operator/student RLS와 동시 quota 요청을 검증해야 한다.
 
+## 2026-09-04 — Codex — PR #23 migration 충돌 해소·원격 적용
+
+- 한 일: 사용자 승인에 따라 PR22에서 원격 적용한 migration 5개를 원본 그대로 이 worktree에 반영했다. 원본과 개행 정규화 후 내용 일치를 확인했다. PR22 코드 전체는 가져오지 않았다.
+- 한 일: 원격 후속 적용을 재확인하여 PR23 미적용 migration을 `20260904020000_add_student_feedback_author_lookup.sql`로 변경했다. SQL 내용 해시는 변경 전과 동일하다. dry-run에서 이 파일 한 건만 적용됨을 확인한 후 원격 적용했다.
+- 한 일: PR22가 제거한 `lessons.program_type` 대신 학생 본인의 active assignment에 연결된 `student_programs.program_type`으로 PR23 상세·아카이브의 이용권 라벨을 조회하도록 호환성을 수정했다.
+- 확인된 것: local/remote migration 31개 일치, public/private DB lint 통과. 신규 RPC 반환값은 피드백 ID·표시 이름·역할 또는 댓글 ID·표시 이름만 포함한다. search_path 고정, authenticated만 EXECUTE, anon/service_role 실행 권한 없음.
+- 확인된 것: 기존 계정의 read-only RLS 검증과 신규 RPC의 알 수 없는 ID·NULL·초과 입력 비노출 검증 통과. 사용자/피드백/댓글 데이터는 생성하거나 수정하지 않았다. 게시 피드백·댓글 실데이터가 없어 양성 렌더링 및 댓글 저장 E2E는 미검증이다.
+- 추가 반영: 작업 중 PR22가 main에 병합되어 `b95ac7151c943f8d33fd96429a65c7d592035331`로 fast-forward했다. PR22 이용권 표시·인증 수정과 PR23 상세 Link를 함께 보존했으며 운영 화면 코드도 main 원본으로 통합됐다.
+- 확인된 것: 최종 ESLint, `tsc --noEmit --incremental false`, production build/TypeScript, `git diff --check` 통과. 공개 Supabase 설정을 프로세스에만 전달해 127.0.0.1:3200 production 서버를 재시작했다. commit/push/PR/merge 없이 변경과 원본 보존 stash를 유지한다.
+
+## 2026-09-04 — Codex — PR #23 main 반영·원격 검증 중단 지점
+
+- 한 일: 기존 PR23 미커밋 변경을 stash로 보존하고 `5554672055f1fa96ab94a28565edc6c1de7ffb1e`로 fast-forward했다. 개발 기록 충돌은 PR21·PR23 내용을 모두 보존했으며 변경은 unstaged 상태로 복원했다.
+- 확인된 것: PR23 신규 migration 내용은 원본 해시와 동일하다. 원격 `20260902000000`은 PR23이 아닌 `neutral_lessons_and_allowances`이며 `20260902010000`, `20260902020000`도 원격에만 존재한다. PR23 작성자 RPC 두 개는 원격에 없다.
+- 막힌 것: migration 버전 충돌 및 local/remote 이력 불일치로 하네스 규칙에 따라 DB 적용·이력 repair를 중단했다. 원격 선적용 migration 원본 반영과 PR23 미적용 migration 버전 변경에 대한 별도 판단이 필요하다.
+- 확인된 것: 원격 public/private DB lint 통과. read-only transaction으로 학생 10계정의 본인 일정·출결·피드백/댓글 접근과 Draft 차단, 운영자 일정 SELECT를 검증했다. 현재 게시 피드백과 댓글은 0건이므로 작성자 표시·댓글 작성 end-to-end 검증은 남아 있다. 애플리케이션 데이터는 변경하지 않았다.
+- 확인된 것: 최신 main 기준 production build와 TypeScript 검사 통과. localhost 3200 production 서버의 학생 로그인 HTTP 200, 비인증 일정 HTTP 307 확인. migration 적용 전이므로 피드백이 생기면 신규 RPC 호출은 실패할 수 있다.
+
 ## 2026-09-02 — Codex — PR #21 운영 화면 UX 개선
 
 - 한 일: 학생 신규 등록의 현재 입력 비밀번호를 포인터 또는 키보드로 누르는 동안만 표시하고, release/leave/cancel/blur에서 즉시 숨기는 접근 가능한 보기 버튼을 추가했다.
@@ -53,6 +83,14 @@
 - 한 일: 직원 저장/삭제를 독립 form 상태로 한 줄 배치하고, 보강 원수업 정보 sub-card 전체를 일정 상세 링크로 만들었다.
 - 확인된 것: DB schema, migration, RPC, RLS, 데이터 query 및 mutation action은 변경하지 않았으며 ESLint, TypeScript, production build를 통과했다.
 - 다음 할 일: production UI에서 포인터·키보드 비밀번호 보기, 일정 필터/빈 상태, 직원 버튼, 원수업 링크를 사용자 확인한다.
+
+## 2026-09-02 — Codex — PR #23 학생 일정 상세·피드백 탐색
+
+- 한 일: 학생 내 일정 카드를 상세 Link로 연결하고, 본인 active assignment의 비-Draft 일정에서 일정·담당 직원·본인 출결·게시 피드백·댓글/답글을 한 흐름으로 확인하도록 구현했다.
+- 한 일: 내 피드백을 lesson KST 날짜 기반 전체/최근 1·3·6개월/직접 기간과 최신·오래된 수업순 URL 필터를 지원하는 공식 피드백 카드 아카이브로 정리했다.
+- 한 일: 실제 피드백 제공자 이름·역할과 댓글 작성자 표시 이름만 반환하는 제한형 RPC를 append-only migration으로 추가했다. 직원 전체 목록, 직원 ID, `auth_user_id`는 조회 결과에 포함하지 않는다.
+- 확인된 것: 기존 RLS가 타 학생, Draft, 미게시·삭제 피드백과 접근 불가 댓글을 차단하며 댓글 parent의 같은 feedback 복합 FK와 기존 작성 action을 재사용한다. 학생에게 숨겨진 soft-delete parent는 노출 가능한 답글 앞에 안전한 placeholder로 표시한다.
+- 확인된 것: ESLint, TypeScript, production build, `git diff --check`와 KST 기간 경계·invalid query 검사를 통과했다. 별도 worktree에 DB 환경과 Supabase CLI가 없어 migration 적용 및 실제 student/operator 세션 RLS 검증은 수행하지 않았고 사용자 데이터도 변경하지 않았다.
 
 ## 2026-09-01 — Codex — 학생정보·이용프로그램 통합 관리
 
