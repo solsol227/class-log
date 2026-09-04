@@ -131,7 +131,9 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
               <li key={`${status.student_program_id}-${status.period_month ?? "enrollment"}`} className="rounded-xl bg-[#f4f8f7] p-4">
                 <div className="flex items-center justify-between gap-3"><p className="font-bold">{PROGRAM_LABELS[status.program_type] ?? status.program_type}</p><p className="font-bold text-[var(--accent-strong)]">일반 {status.remaining_count ?? "미설정"}회</p></div>
                 <p className="mt-2 text-sm text-[var(--muted)]">예약 {status.reserved_count} · 사용 {status.used_count}</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">보강 대기 {status.makeup_available_count} · 예약 {status.makeup_reserved_count}</p>
+                {status.makeup_available_count > 0 || status.makeup_reserved_count > 0 ? (
+                  <p className="mt-1 text-sm text-[var(--muted)]">보강 대기 {status.makeup_available_count} · 예정 {status.makeup_reserved_count}</p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -154,17 +156,20 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
       ) : (
         <ol className="mt-8 space-y-3">
           {visibleLessons.map((lesson) => (
-            <li key={lesson.id} className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-bold text-[var(--accent-strong)]">{formatScheduleDate(lesson.starts_at)}</p>
-                  <h2 className="mt-2 text-xl font-bold tracking-[-0.02em]">{lesson.title}</h2>
+            <li key={lesson.id}>
+              <Link href={`/student/schedule/${lesson.id}`} className="block rounded-2xl border border-[var(--line)] bg-white p-5 transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-[0_14px_35px_rgba(23,64,60,0.09)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] active:bg-[#f4f8f7] sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-[var(--accent-strong)]">{formatScheduleDate(lesson.starts_at)}</p>
+                    <h2 className="mt-2 text-xl font-bold tracking-[-0.02em]">{lesson.title}</h2>
+                  </div>
+                  <span className="rounded-lg bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(lesson.status, lesson.ends_at)}</span>
                 </div>
-                <span className="rounded-lg bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(lesson.status, lesson.ends_at)}</span>
-              </div>
-              {lesson.location ? <p className="mt-3 text-sm text-[var(--muted)]">장소: {lesson.location}</p> : null}
-              <p className="mt-2 text-sm font-bold text-[var(--accent-strong)]">사용 이용권 · {PROGRAM_LABELS[programTypeById.get(programIdByLesson.get(lesson.id) ?? "") ?? ""] ?? "확인 불가"}</p>
-              {(staffNamesByLesson.get(lesson.id)?.length ?? 0) > 0 ? <p className="mt-2 text-sm text-[var(--muted)]">담당 · {staffNamesByLesson.get(lesson.id)?.join(", ")}</p> : null}
+                {lesson.location ? <p className="mt-3 text-sm text-[var(--muted)]">장소: {lesson.location}</p> : null}
+                <p className="mt-2 text-sm font-bold text-[var(--accent-strong)]">사용 이용권 · {PROGRAM_LABELS[programTypeById.get(programIdByLesson.get(lesson.id) ?? "") ?? ""] ?? "확인 불가"}</p>
+                {(staffNamesByLesson.get(lesson.id)?.length ?? 0) > 0 ? <p className="mt-2 text-sm text-[var(--muted)]">담당 · {staffNamesByLesson.get(lesson.id)?.join(", ")}</p> : null}
+                <span className="mt-4 inline-flex min-h-10 items-center text-sm font-bold text-[var(--accent-strong)]">상세 보기 <span aria-hidden="true" className="ml-1">→</span></span>
+              </Link>
             </li>
           ))}
         </ol>

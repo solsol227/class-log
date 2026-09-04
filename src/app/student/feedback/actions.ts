@@ -7,15 +7,31 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export async function addStudentComment(feedbackId: string, formData: FormData) {
+function feedbackDetailPath(lessonId: string, feedbackId: string, error = false) {
+  return `/student/schedule/${lessonId}${error ? "?feedbackError=1" : ""}#feedback-${feedbackId}`;
+}
+
+export async function addStudentComment(feedbackId: string, lessonId: string, formData: FormData) {
   await requireAuthenticatedUser("/login/student", "student");
   const body = String(formData.get("body") ?? "").trim();
   const parentCommentId = String(formData.get("parent_comment_id") ?? "") || null;
-  if (!UUID_PATTERN.test(feedbackId) || (parentCommentId && !UUID_PATTERN.test(parentCommentId)) || !body) redirect("/student/feedback?error=1");
+  if (!UUID_PATTERN.test(feedbackId) || !UUID_PATTERN.test(lessonId) || (parentCommentId && !UUID_PATTERN.test(parentCommentId)) || !body || body.length > 2000) {
+    redirect(UUID_PATTERN.test(feedbackId) && UUID_PATTERN.test(lessonId) ? feedbackDetailPath(lessonId, feedbackId, true) : "/student/schedule");
+  }
   const supabase = await createSupabaseServerClient();
+  const { data: feedback, error: feedbackError } = await supabase
+    .from("lesson_feedback")
+    .select("id")
+    .eq("id", feedbackId)
+    .eq("lesson_id", lessonId)
+    .not("published_at", "is", null)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (feedbackError || !feedback) redirect(feedbackDetailPath(lessonId, feedbackId, true));
   const { data, error } = await supabase.from("feedback_comments").insert({ feedback_id: feedbackId, parent_comment_id: parentCommentId, body }).select("id").maybeSingle();
-  if (error || !data) redirect("/student/feedback?error=1");
+  if (error || !data) redirect(feedbackDetailPath(lessonId, feedbackId, true));
   revalidatePath("/student/feedback");
+  revalidatePath(`/student/schedule/${lessonId}`);
   revalidatePath("/operator/schedules/[lessonId]", "page");
-  redirect("/student/feedback?commented=1");
+  redirect(feedbackDetailPath(lessonId, feedbackId));
 }
