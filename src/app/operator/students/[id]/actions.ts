@@ -38,6 +38,44 @@ export type StudentAssignmentActionState = {
   formError?: string;
 };
 
+export async function addAllowanceAdjustment(studentId: string, studentProgramId: string, formData: FormData) {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  const targetMonthInput = String(formData.get("target_month") ?? "");
+  const delta = Number(formData.get("delta"));
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(studentProgramId) || !Number.isInteger(delta) || delta === 0 || !reason) {
+    redirect(`/operator/students/${studentId}?allowanceError=1`);
+  }
+  const targetMonth = targetMonthInput ? `${targetMonthInput}-01` : null;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("add_student_program_allowance_adjustment", {
+    target_student_program_id: studentProgramId,
+    adjustment_month: targetMonth,
+    adjustment_delta: delta,
+    adjustment_reason: reason,
+  });
+  if (error || !data) redirect(`/operator/students/${studentId}?allowanceError=1`);
+  revalidatePath(`/operator/students/${studentId}`);
+  redirect(`/operator/students/${studentId}?allowanceUpdated=1`);
+}
+
+export async function configureRentalAllowance(studentId: string, studentProgramId: string, formData: FormData) {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  const allowanceCount = Number(formData.get("allowance_count"));
+  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(studentProgramId) || !Number.isInteger(allowanceCount) || allowanceCount <= 0) {
+    redirect(`/operator/students/${studentId}?allowanceError=1`);
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("configure_rental_program_allowance", {
+    target_student_program_id: studentProgramId,
+    allowance_count: allowanceCount,
+  });
+  if (error || !data) redirect(`/operator/students/${studentId}?allowanceError=1`);
+  revalidatePath(`/operator/students/${studentId}`);
+  revalidatePath("/operator/schedules/new");
+  redirect(`/operator/students/${studentId}?allowanceUpdated=1`);
+}
+
 const PROGRAM_TYPES = ["weekday_vocal", "weekend_vocal", "rental", "trial"] as const;
 const STOP_REASONS = ["break", "ended", "other"] as const;
 const ACQUISITION_SOURCES = ["instagram", "daangn", "referral", "naver"] as const;
@@ -54,7 +92,7 @@ function isValidDate(value: string) {
 
 type ProgramChanges = {
   stop: Array<{ id: string; endedAt: string; stopReason: string | null }>;
-  start: Array<{ programType: string; startedAt: string }>;
+  start: Array<{ programType: string; startedAt: string; baseAllowanceCount?: number }>;
   reasonUpdates: Array<{ id: string; stopReason: string | null }>;
 };
 
@@ -72,6 +110,7 @@ function parseProgramChanges(value: FormDataEntryValue | null): ProgramChanges |
     const start = parsed.start.map((item) => ({
       programType: String(item?.programType ?? ""),
       startedAt: String(item?.startedAt ?? ""),
+      baseAllowanceCount: item?.baseAllowanceCount === undefined ? undefined : Number(item.baseAllowanceCount),
     }));
     const reasonUpdates = parsed.reasonUpdates.map((item) => ({
       id: String(item?.id ?? ""),
@@ -79,7 +118,7 @@ function parseProgramChanges(value: FormDataEntryValue | null): ProgramChanges |
     }));
 
     if (stop.some((item) => !UUID_PATTERN.test(item.id) || !isValidDate(item.endedAt) || (item.stopReason && !STOP_REASONS.includes(item.stopReason as (typeof STOP_REASONS)[number])))) return null;
-    if (start.some((item) => !PROGRAM_TYPES.includes(item.programType as (typeof PROGRAM_TYPES)[number]) || !isValidDate(item.startedAt))) return null;
+    if (start.some((item) => !PROGRAM_TYPES.includes(item.programType as (typeof PROGRAM_TYPES)[number]) || !isValidDate(item.startedAt) || (item.programType === "rental" && (!Number.isInteger(item.baseAllowanceCount) || (item.baseAllowanceCount ?? 0) <= 0)))) return null;
     if (reasonUpdates.some((item) => !UUID_PATTERN.test(item.id) || (item.stopReason && !STOP_REASONS.includes(item.stopReason as (typeof STOP_REASONS)[number])))) return null;
 
     const stopIds = stop.map((item) => item.id);
@@ -100,35 +139,21 @@ export async function assignScheduleToStudent(
 ): Promise<StudentAssignmentActionState> {
   await requireAuthenticatedUser("/login/operator", "operator");
   const lessonId = String(formData.get("lesson_id") ?? "");
+  const studentProgramId = String(formData.get("student_program_id") ?? "");
 
-  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(lessonId)) {
+  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(lessonId) || !UUID_PATTERN.test(studentProgramId)) {
     return { formError: "배정할 학생 또는 일정을 확인해 주세요." };
   }
 
   const supabase = await createSupabaseServerClient();
-  const [{ data: student, error: studentError }, { data: lesson, error: lessonError }] = await Promise.all([
-    supabase.from("students").select("id").eq("id", studentId).maybeSingle(),
-    supabase.from("lessons").select("id, status, program_type").eq("id", lessonId).maybeSingle(),
-  ]);
-
-  if (studentError || lessonError || !student || !lesson) {
-    if (studentError) console.error(studentError);
-    if (lessonError) console.error(lessonError);
-    return { formError: "학생 또는 일정 정보를 확인하지 못했습니다." };
-  }
-  if (lesson.status === "cancelled") {
-    return { formError: "취소된 일정에는 학생을 배정할 수 없습니다." };
-  }
-
-  const { data: program, error: programError } = await supabase.from("student_programs").select("id").eq("student_id", studentId).eq("program_type", lesson.program_type).eq("status", "active").maybeSingle();
-  if (programError || !program) return { formError: "학생이 해당 프로그램을 이용 중이 아닙니다." };
-  const { data: assignment, error } = await supabase.from("lesson_assignments").upsert(
-    { lesson_id: lessonId, student_id: studentId, student_program_id: program.id, unassigned_at: null },
-    { onConflict: "lesson_id,student_id" },
-  ).select("lesson_id").maybeSingle();
+  const { data: assignment, error } = await supabase.rpc("assign_student_to_lesson", {
+    target_lesson_id: lessonId,
+    target_student_id: studentId,
+    target_student_program_id: studentProgramId,
+  });
   if (error || !assignment) {
     console.error(error);
-    return { formError: "일정을 배정하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    return { formError: error?.code === "23514" ? "이용권의 남은 횟수 또는 상태를 확인해 주세요." : "일정을 배정하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/operator/schedules");

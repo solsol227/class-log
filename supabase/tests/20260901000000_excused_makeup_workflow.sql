@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(6);
+select plan(8);
 
 create temporary table pr19_context (
   operator_id uuid not null,
@@ -34,13 +34,13 @@ cross join lateral (
   join public.student_programs programs
     on programs.student_id = students.id
    and programs.status = 'active'
-   and programs.program_type in ('weekday_vocal', 'weekend_vocal', 'trial')
+   and programs.program_type in ('weekday_vocal', 'weekend_vocal')
   limit 1
 ) students
 join public.student_programs programs
   on programs.student_id = students.id
  and programs.status = 'active'
- and programs.program_type in ('weekday_vocal', 'weekend_vocal', 'trial')
+ and programs.program_type in ('weekday_vocal', 'weekend_vocal')
 where operators.raw_app_meta_data ->> 'role' = 'operator'
 limit 1;
 
@@ -88,17 +88,30 @@ begin
     true
   );
 
+  perform public.add_student_program_allowance_adjustment(
+    ctx.student_program_id,
+    date_trunc('month', now() at time zone 'Asia/Seoul')::date,
+    20,
+    'PR19 workflow test capacity'
+  );
+  perform public.add_student_program_allowance_adjustment(
+    ctx.student_program_id,
+    (date_trunc('month', now() at time zone 'Asia/Seoul') + interval '1 month')::date,
+    20,
+    'PR19 workflow test next-month capacity'
+  );
+
   insert into public.lessons (
-    id, title, starts_at, ends_at, status, program_type, created_by
+    id, title, starts_at, ends_at, status, created_by
   ) values
-    (source_one, 'PR19 source one', now() + interval '1 day', now() + interval '2 days', 'scheduled', ctx.program_type, ctx.operator_id),
-    (source_two, 'PR19 source two', now() + interval '3 days', now() + interval '4 days', 'scheduled', ctx.program_type, ctx.operator_id),
-    (source_three, 'PR19 source three', now() + interval '5 days', now() + interval '6 days', 'scheduled', ctx.program_type, ctx.operator_id),
-    (replacement_one, 'PR19 replacement one', now() + interval '7 days', now() + interval '8 days', 'scheduled', ctx.program_type, ctx.operator_id),
-    (replacement_two, 'PR19 replacement two', now() + interval '9 days', now() + interval '10 days', 'scheduled', ctx.program_type, ctx.operator_id),
-    (replacement_three, 'PR19 replacement three', now() + interval '11 days', now() + interval '12 days', 'scheduled', ctx.program_type, ctx.operator_id),
-    (replacement_four, 'PR19 replacement four', now() + interval '13 days', now() + interval '14 days', 'scheduled', ctx.program_type, ctx.operator_id),
-    (draft_replacement, 'PR19 draft replacement', now() + interval '15 days', now() + interval '16 days', 'draft', ctx.program_type, ctx.operator_id);
+    (source_one, 'PR19 source one', now() + interval '1 day', now() + interval '2 days', 'scheduled', ctx.operator_id),
+    (source_two, 'PR19 source two', now() + interval '3 days', now() + interval '4 days', 'scheduled', ctx.operator_id),
+    (source_three, 'PR19 source three', now() + interval '5 days', now() + interval '6 days', 'scheduled', ctx.operator_id),
+    (replacement_one, 'PR19 replacement one', now() + interval '7 days', now() + interval '8 days', 'scheduled', ctx.operator_id),
+    (replacement_two, 'PR19 replacement two', now() + interval '9 days', now() + interval '10 days', 'scheduled', ctx.operator_id),
+    (replacement_three, 'PR19 replacement three', now() + interval '11 days', now() + interval '12 days', 'scheduled', ctx.operator_id),
+    (replacement_four, 'PR19 replacement four', now() + interval '13 days', now() + interval '14 days', 'scheduled', ctx.operator_id),
+    (draft_replacement, 'PR19 draft replacement', now() + interval '15 days', now() + interval '16 days', 'draft', ctx.operator_id);
 
   insert into public.lesson_assignments (
     lesson_id, student_id, student_program_id, assigned_by
@@ -327,6 +340,22 @@ select is(
   ),
   0::bigint,
   'student cannot read Draft-linked makeup or operator event history'
+);
+
+select is(
+  (select count(*) from public.student_program_allowance_adjustments),
+  0::bigint,
+  'student cannot read operator allowance adjustment audit rows'
+);
+
+select ok(
+  (select count(*) from public.get_my_student_program_allowance_statuses()) > 0
+  and not exists (
+    select 1
+    from public.get_my_student_program_allowance_statuses()
+    where student_id <> (select student_id from pr19_context)
+  ),
+  'student allowance RPC returns only the signed-in student aggregate'
 );
 
 reset role;

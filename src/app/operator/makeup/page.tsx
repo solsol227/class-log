@@ -43,6 +43,13 @@ const LESSON_STATUS_LABELS: Record<string, string> = {
   cancelled: "취소",
 };
 
+const PROGRAM_LABELS: Record<string, string> = {
+  weekday_vocal: "평일보컬",
+  weekend_vocal: "주말보컬",
+  trial: "체험",
+  rental: "대여",
+};
+
 type MakeupNotices = {
   error?: string;
   scheduled?: string;
@@ -54,7 +61,7 @@ function errorMessage(code?: string) {
   if (code === "reason_state") return "보강 상태가 변경되어 사유를 수정할 수 없습니다.";
   if (code === "reason") return "보강 사유를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
   if (code === "conflict") return "학생의 다른 일정과 시간이 겹쳐 보강 일정을 배정할 수 없습니다.";
-  if (code === "program") return "원수업과 같은 프로그램이며 학생이 이용 중인 일정을 선택해 주세요.";
+  if (code === "program") return "보강권의 source 이용권과 대체 일정 상태를 확인해 주세요.";
   if (code === "replacement_used") return "이 학생의 해당 일정은 다른 보강에 이미 사용 중입니다.";
   if (code === "same_replacement") return "현재 대체 일정과 다른 일정을 선택해 주세요.";
   if (code === "assignment_history") return "이전 대체 일정에 보존해야 할 출결 또는 피드백 기록이 있어 일정을 변경할 수 없습니다.";
@@ -82,21 +89,22 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
   await requireAuthenticatedUser("/login/operator", "operator");
   const notices = await searchParams;
   const supabase = await createSupabaseServerClient();
-  const [makeupsResult, studentsResult, lessonsResult, eventsResult] = await Promise.all([
+  const [makeupsResult, studentsResult, lessonsResult, eventsResult, programsResult] = await Promise.all([
     supabase
       .from("makeup_lessons")
-      .select("id, attendance_record_id, replacement_attendance_record_id, student_id, original_lesson_id, replacement_lesson_id, reason, status, created_at")
+      .select("id, attendance_record_id, replacement_attendance_record_id, source_student_program_id, student_id, original_lesson_id, replacement_lesson_id, reason, status, created_at")
       .order("created_at"),
     supabase.from("students").select("id, nickname").order("nickname"),
-    supabase.from("lessons").select("id, title, starts_at, program_type, status").order("starts_at"),
+    supabase.from("lessons").select("id, title, starts_at, status").order("starts_at"),
     supabase
       .from("makeup_lesson_events")
       .select("id, makeup_lesson_id, event_type, event_cause, created_at")
       .order("created_at"),
+    supabase.from("student_programs").select("id, program_type"),
   ]);
-  if (makeupsResult.error || studentsResult.error || lessonsResult.error || eventsResult.error) {
+  if (makeupsResult.error || studentsResult.error || lessonsResult.error || eventsResult.error || programsResult.error) {
     throw new Error("보강 정보를 불러오지 못했습니다.", {
-      cause: makeupsResult.error ?? studentsResult.error ?? lessonsResult.error ?? eventsResult.error,
+      cause: makeupsResult.error ?? studentsResult.error ?? lessonsResult.error ?? eventsResult.error ?? programsResult.error,
     });
   }
 
@@ -104,6 +112,7 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
   const students = studentsResult.data;
   const lessons = lessonsResult.data;
   const events = eventsResult.data;
+  const programById = new Map(programsResult.data.map((program) => [program.id, program.program_type]));
   const attendanceIds = [...new Set(makeups.flatMap((item) => [
     item.attendance_record_id,
     item.replacement_attendance_record_id,
@@ -123,12 +132,9 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
   const success = successMessage(notices);
 
   function replacementOptions(originalLessonId: string) {
-    const original = lessonById.get(originalLessonId);
-    if (!original) return [];
     return lessons.filter((lesson) => (
       lesson.id !== originalLessonId
-      && lesson.status !== "cancelled"
-      && lesson.program_type === original.program_type
+      && (lesson.status === "draft" || lesson.status === "scheduled")
     ));
   }
 
@@ -187,6 +193,7 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                   <p className="mt-1 text-sm text-[var(--muted)]">
                     근거 출결: {sourceStatus ? ATTENDANCE_LABELS[sourceStatus] ?? sourceStatus : "확인 불가"}
                   </p>
+                  <p className="mt-1 text-sm font-bold text-[var(--accent-strong)]">보강 이용권: {PROGRAM_LABELS[programById.get(item.source_student_program_id) ?? ""] ?? "확인 불가"}</p>
                   {(status === "requested" || status === "scheduled") ? (
                     <MakeupReasonEditor makeupId={item.id} reason={item.reason} />
                   ) : (
@@ -206,7 +213,7 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                           <button className="h-10 w-full rounded-lg border font-bold">일정 배정</button>
                         </form>
                       ) : (
-                        <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">같은 프로그램의 배정 가능한 일정이 없습니다.</p>
+                        <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">배정 가능한 Draft 또는 예정 일정이 없습니다.</p>
                       )}
                       <Link href="/operator/schedules/new" className="mt-2 block text-center text-sm font-bold underline">새 일정 생성</Link>
                     </>

@@ -57,6 +57,7 @@ const NETWORK_ERROR_CODES = new Set([
 ]);
 
 const AUTH_NOTICE_TO_ERROR = {
+  "auth-unavailable": "auth_server_error",
   "session-expired": "session_expired",
   "invalid-role": "invalid_role",
   "forbidden-route": "forbidden_route",
@@ -79,6 +80,20 @@ export function getAuthNoticeMessage(value: unknown): AuthUserMessage | null {
 
   const code = AUTH_NOTICE_TO_ERROR[value as AuthNotice];
   return getAuthUserMessage(code);
+}
+
+// An unavailable Auth server does not prove that a session is invalid.
+// Preserve cookies so the same session can be verified when connectivity returns.
+export function isAuthServiceUnavailable(error: unknown): boolean {
+  if (!isRecord(error)) return false;
+  const status = typeof error.status === "number" ? error.status : null;
+  return error.name === "AuthRetryableFetchError"
+    || error.name === "AuthUnknownError"
+    || status === 0
+    || status === 408
+    || status === 429
+    || (status !== null && status >= 500)
+    || (typeof error.code === "string" && NETWORK_ERROR_CODES.has(error.code));
 }
 
 export function classifySupabaseLoginError(error: unknown): AuthErrorCode {

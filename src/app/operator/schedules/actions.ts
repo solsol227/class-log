@@ -15,8 +15,8 @@ const SCHEDULE_ERROR =
 
 function scheduleRpcErrorMessage(code?: string) {
   if (code === "23P01") return "선택한 학생에게 시간이 겹치는 다른 일정이 있습니다.";
-  if (code === "23514") return "일정 프로그램과 학생의 이용 프로그램을 다시 확인해 주세요.";
-  if (code === "P0001") return "보강으로 연결된 학생입니다. 보강관리에서 대체 일정을 변경해 주세요.";
+  if (code === "23514") return "선택한 이용권의 남은 횟수와 프로그램 상태를 다시 확인해 주세요.";
+  if (code === "P0001") return "이미 시작했거나 기록·보강이 연결된 배정은 변경할 수 없습니다.";
   return SCHEDULE_ERROR;
 }
 
@@ -26,7 +26,6 @@ type ScheduleFieldErrors = {
   startsAt?: string;
   endsAt?: string;
   students?: string;
-  program?: string;
 };
 
 export type ScheduleActionState = {
@@ -39,8 +38,7 @@ export type ScheduleActionState = {
     endTime: string;
     location: string;
     notes: string;
-    studentIds: string[];
-    programType: string;
+    studentProgramIds: string[];
     status: string;
   };
 };
@@ -74,10 +72,9 @@ function readScheduleForm(formData: FormData) {
   const endTimeInput = String(formData.get("end_time") ?? "").trim();
   const rawLocation = String(formData.get("location") ?? "");
   const rawNotes = String(formData.get("notes") ?? "");
-  const rawStudentIds = [...new Set(formData.getAll("student_ids").map(String))];
-  const programType = String(formData.get("program_type") ?? "");
+  const rawStudentProgramIds = [...new Set(formData.getAll("student_program_ids").map(String))];
   const status = String(formData.get("status") ?? "scheduled");
-  const studentIds = rawStudentIds.filter((id) => UUID_PATTERN.test(id));
+  const studentProgramIds = rawStudentProgramIds.filter((id) => UUID_PATTERN.test(id));
   const startsAt = toKstTimestamp(dateInput, startTimeInput);
   const endsAt = toKstTimestamp(dateInput, endTimeInput);
   const fieldErrors: ScheduleFieldErrors = {};
@@ -92,22 +89,20 @@ function readScheduleForm(formData: FormData) {
   if (startsAt && endsAt && startTimeInput >= endTimeInput) {
     fieldErrors.endsAt = "종료 시각은 시작 시각보다 늦어야 합니다.";
   }
-  if (studentIds.length !== rawStudentIds.length) {
-    fieldErrors.students = "배정할 학생 정보를 다시 선택해 주세요.";
+  if (studentProgramIds.length !== rawStudentProgramIds.length) {
+    fieldErrors.students = "배정할 학생과 이용권 정보를 다시 선택해 주세요.";
   }
-  if (!["weekday_vocal", "weekend_vocal", "trial"].includes(programType)) fieldErrors.program = "프로그램을 다시 선택해 주세요.";
-  if (!["draft", "scheduled"].includes(status)) fieldErrors.program = "일정 상태를 확인해 주세요.";
+  if (!["draft", "scheduled"].includes(status)) fieldErrors.students = "일정 상태를 확인해 주세요.";
 
   return {
     fieldErrors,
-    values: { title: rawTitle, date: dateInput, startTime: startTimeInput, endTime: endTimeInput, location: rawLocation, notes: rawNotes, studentIds, programType, status },
+    values: { title: rawTitle, date: dateInput, startTime: startTimeInput, endTime: endTimeInput, location: rawLocation, notes: rawNotes, studentProgramIds, status },
     record: {
       title: rawTitle.trim(),
       starts_at: startsAt,
       ends_at: endsAt,
       location: rawLocation.trim() || null,
       notes: rawNotes.trim() || null,
-      program_type: programType,
       status,
     },
   };
@@ -127,7 +122,7 @@ export async function createSchedule(
   const { data: lessonId, error } = await supabase.rpc("save_lesson_with_assignments", {
     lesson_id: null, lesson_title: parsed.record.title, lesson_starts_at: parsed.record.starts_at,
     lesson_ends_at: parsed.record.ends_at, lesson_location: parsed.record.location ?? "", lesson_notes: parsed.record.notes ?? "",
-    lesson_program_type: parsed.record.program_type, lesson_status: parsed.record.status, selected_student_ids: parsed.values.studentIds,
+    lesson_status: parsed.record.status, selected_student_program_ids: parsed.values.studentProgramIds,
   });
 
   if (error || !lessonId) {
@@ -166,8 +161,7 @@ export async function updateSchedule(
   const { data: updated, error } = await supabase.rpc("save_lesson_with_assignments", {
     lesson_id: lessonId, lesson_title: parsed.record.title, lesson_starts_at: parsed.record.starts_at,
     lesson_ends_at: parsed.record.ends_at, lesson_location: parsed.record.location ?? "", lesson_notes: parsed.record.notes ?? "",
-    lesson_program_type: parsed.record.program_type, lesson_status: parsed.record.status,
-    selected_student_ids: parsed.values.studentIds,
+    lesson_status: parsed.record.status, selected_student_program_ids: parsed.values.studentProgramIds,
   });
 
   if (error || !updated) {
@@ -177,7 +171,10 @@ export async function updateSchedule(
 
   revalidatePath("/operator/schedules");
   revalidatePath(`/operator/schedules/${lessonId}`);
-  for (const studentId of new Set(parsed.values.studentIds)) {
+  const { data: selectedPrograms } = parsed.values.studentProgramIds.length
+    ? await supabase.from("student_programs").select("student_id").in("id", parsed.values.studentProgramIds)
+    : { data: [] };
+  for (const studentId of new Set((selectedPrograms ?? []).map((program) => program.student_id))) {
     revalidatePath(`/operator/students/${studentId}`);
     revalidatePath(`/operator/students/${studentId}/lessons`);
   }
@@ -308,6 +305,19 @@ export async function confirmDraftSchedule(lessonId: string, _previousState: Man
   if (error || !data) return { formError: error?.code === "23P01" ? "학생의 다른 일정과 시간이 겹쳐 확정할 수 없습니다." : "Draft 일정을 확정하지 못했습니다." };
   revalidatePath("/operator/schedules");
   revalidatePath(`/operator/schedules/${lessonId}`);
+  redirect(`/operator/schedules/${lessonId}?updated=1`);
+}
+
+export async function cancelSchedule(lessonId: string, _previousState: ManagementActionState): Promise<ManagementActionState> {
+  void _previousState;
+  await requireAuthenticatedUser("/login/operator", "operator");
+  if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("cancel_lesson", { target_lesson_id: lessonId });
+  if (error || !data) return { formError: error?.code === "P0001" ? "연결된 보강을 먼저 변경하거나 사용 기록을 확인해 주세요." : "일정을 취소하지 못했습니다." };
+  revalidatePath("/operator/schedules");
+  revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath("/operator/makeup");
   redirect(`/operator/schedules/${lessonId}?updated=1`);
 }
 

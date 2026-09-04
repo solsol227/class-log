@@ -2,11 +2,11 @@
 
 ## 현재 기준
 
-- 구현 브랜치: `feat/student-program-management`
-- 기준 main commit: `d8c01137855a37f7523ee54501df4336fd80152e`
-- migration local/remote 25개 일치
-- PR #19 merge 완료
-- 학생정보·이용프로그램 통합 관리 구현·검증 진행 중, 아직 미커밋
+- 구현 브랜치: `codex/neutral-lessons-allowances`
+- 구현 기준 main commit: `5554672055f1fa96ab94a28565edc6c1de7ffb1e` (PR #21)
+- migration local/remote 30개 일치
+- 중립 lesson·이용권, deadlock·인증 장애 처리, 단일 학생 배정 보존·Draft 집계 비노출 검증 완료
+- 실제 merge 상태와 최종 commit은 Git/PR 이력을 기준으로 확인한다.
 
 ## 완료 — PR #15 보안 hardening
 
@@ -149,6 +149,24 @@
 - [ ] rental_reservations
 - [ ] 새 보강 일정 생성 후 원요청 자동 복귀·연결 UX
 - [ ] 브라우저 CRUD E2E 자동화
+
+## 구현·검증 완료 — 중립 lesson과 학생 프로그램 이용권
+
+- [x] `lessons.program_type` 및 exact-match 설계 제거
+- [x] assignment를 `student_program_id` 이용권 귀속으로 전환
+- [x] Draft 0차감, Scheduled 확정 quota 검증
+- [x] 시작 전·무기록 soft-unassign 반환 보호
+- [x] student program 기본 제공량과 append-only adjustment
+- [x] makeup `source_student_program_id` 고정 및 stopped source 허용
+- [x] 일정 학생별 이용권 선택 UI와 roster 표시
+- [x] 보강 lesson 프로그램 후보 필터 제거
+- [x] 학생 상세 이용 횟수/조정 UI
+- [x] 학생 본인 이용권·일정별 사용 이용권 표시와 자기 소유 집계 RPC
+- [x] SQL 회귀 테스트 추가 및 기존 보강 테스트 중립 lesson 대응
+- [x] local/remote migration 적용 및 DB lint (28개 일치)
+- [x] operator/student/anon 실제 RLS 및 rollback 핵심 DB 검증
+- [x] 실제 두 DB 세션에서 확정/저장 deadlock 재현 및 수정 후 경합·rollback 검증
+- [ ] production UI 사용자 확인
 
 ## 구현 중 — PR #21 운영 화면 UX 개선
 

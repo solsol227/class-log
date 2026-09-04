@@ -48,6 +48,14 @@
 - `rental`
 - `trial`
 
+기본 제공량은 `base_allowance_count`에 저장한다.
+
+- weekday/weekend: KST 월별 4회
+- trial: enrollment 전체 1회
+- rental: enrollment 등록 시 설정한 전체 횟수
+
+추가·정정은 `student_program_allowance_adjustments` append-only ledger에 저장한다. 일반 이용 횟수는 별도 차감 row를 만들지 않고 확정 lesson의 active assignment에서 계산한다.
+
 저장 상태:
 - `active`
 - `stopped`
@@ -80,20 +88,13 @@
 
 ## 3. 일정
 
-`lessons.program_type`:
-- `weekday_vocal`
-- `weekend_vocal`
-- `trial`
+lesson은 프로그램 구분이 없는 중립 일정이다. `lessons.program_type`은 제거되었다.
 
 `lessons.status`:
 - `draft`
 - `scheduled`
 - `completed`
 - `cancelled`
-
-`rental`은 lesson에서 제외한다.
-
-기존 lesson은 평일보컬로 backfill 완료했다.
 
 Draft:
 - 운영자에게 보임
@@ -123,7 +124,9 @@ DB `lessons.status`와 화면 표시 상태는 같은 의미를 사용한다.
 - `unassigned_at`
 
 재배정 시 기존 row를 재활성화하며 `assigned_at`의 최초 의미를 보존한다.
-assignment의 학생/프로그램과 lesson의 program_type은 일치해야 한다.
+`student_program_id`는 이 학생의 해당 일정 참여가 사용하는 이용권이다. 같은 lesson의 학생들이 서로 다른 프로그램 이용권을 사용할 수 있으며 `assignment_purpose`는 두지 않는다.
+
+Draft assignment는 quota에 포함하지 않는다. Scheduled/Completed assignment는 quota에 포함하며, 시작 전이고 attendance/feedback이 없을 때만 soft-unassign으로 반환할 수 있다. 보강 replacement는 일반 quota가 아니라 연결된 독립 보강권을 사용한다.
 
 ## 5. 시간 충돌
 
@@ -152,8 +155,17 @@ AND existing.ends_at > new_starts_at
 ### `save_lesson_with_assignments`
 lesson과 배정을 한 transaction으로 저장한다.
 
+입력은 학생 ID가 아니라 선택한 `student_program_id[]`다. DB가 각 enrollment의 학생을 확인하고 같은 학생이 한 lesson에서 두 이용권을 사용하지 못하게 한다.
+
 ### `confirm_draft_lesson`
 Draft를 scheduled로 확정한다.
+
+다중 학생의 advisory lock은 `save_lesson_with_assignments`와 동일하게 학생 UUID 순서로 획득한다. enrollment UUID 순서와 섞으면 확정/저장 동시 요청이 deadlock을 만들 수 있다.
+
+### `assign_student_to_lesson`
+학생 상세에서 한 명을 추가 배정하는 전용 RPC다. lesson row를 잠근 뒤 해당 학생의 배정만 추가/복구하고 다른 배정과 일정 필드는 유지한다. 클라이언트가 읽은 전체 명단을 재저장하지 않는다.
+
+학생 이용권 RPC는 본인 집계만 반환하며 Draft 개수는 0으로 숨기고 Draft만으로 생긴 월도 제외한다. 운영자 집계에는 Draft가 유지된다.
 
 ## 7. 직원
 
@@ -215,10 +227,11 @@ Draft를 scheduled로 확정한다.
 - `attendance_record_id`: 보강 권리를 만든 원 사유결석. 필수이며 전체 상태에서 UNIQUE
 - `replacement_attendance_record_id`: 완료된 보강 일정의 해당 학생 출결
 - `replacement_assignment_provenance`: 보강 매칭 시 배정이 `existing`, `created`, `reactivated` 중 무엇이었는지 기록
+- `source_student_program_id`: 사유결석 원 assignment가 사용한 enrollment. 생성 후 변경 불가
 
 수동 또는 source 없는 보강은 허용하지 않는다. 사유결석 출결이 저장되면 DB trigger가 같은 출결에 대한 requested 보강을 한 건만 생성한다.
 
-replacement lesson은 원수업과 같은 program_type이어야 한다.
+lesson에는 프로그램이 없다. replacement assignment는 `source_student_program_id`를 사용하며 source 프로그램이 stopped가 되어도 이미 발생한 보강권은 유지된다.
 
 ### `schedule_makeup_lesson`
 보강 배정과 replacement lesson assignment를 원자 처리한다.

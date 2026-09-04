@@ -6,7 +6,7 @@ import { assignScheduleToStudent, type StudentAssignmentActionState } from "./ac
 
 const INITIAL_STATE: StudentAssignmentActionState = {};
 
-export function ScheduleAssignmentPicker({ studentId, schedules }: { studentId: string; schedules: AssignmentPickerOption[] }) {
+export function ScheduleAssignmentPicker({ studentId, schedules, programs }: { studentId: string; schedules: AssignmentPickerOption[]; programs: Array<{ value: string; label: string }> }) {
   const [state, formAction] = useActionState(assignScheduleToStudent.bind(null, studentId), INITIAL_STATE);
 
   return (
@@ -19,6 +19,7 @@ export function ScheduleAssignmentPicker({ studentId, schedules }: { studentId: 
       formAction={formAction}
       formError={state.formError}
       submitLabel="배정"
+      secondarySelect={{ name: "student_program_id", label: "사용 이용권", options: programs }}
     />
   );
 }

@@ -20,6 +20,32 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-09-04 — Codex — 동시성·로컬 로그인 수정 및 최종 리뷰
+
+- 한 일: 기존 미커밋 변경을 보존하고 append-only migration 2건을 추가했다. 적용된 기존 migration은 수정하지 않았다. 확정 RPC의 학생 잠금 순서를 저장 RPC와 통일하고, 학생 상세의 단일 추가 배정을 전용 RPC로 바꿨으며 학생용 Draft 개수·Draft 전용 월 노출을 차단했다.
+- 원인: 기존 확정 RPC는 enrollment UUID, 저장 RPC는 학생 UUID 순으로 잠갔다. 순서가 반대인 실제 Draft에서 두 DB 세션으로 deadlock을 재현했다. 수정 후 같은 경합에서 두 RPC가 모두 성공했고 일정·배정·조정 전체 row 해시가 전후 동일했다.
+- 원인: 로컬 로그인은 브라우저용 새 세션과 SSR 검증이 유효해도 네트워크 제한 상태의 Next 서버에서 역할 API 401/보호 페이지 만료 redirect가 발생했다. 같은 빌드를 Supabase 접속 허용 상태로 재시작하자 200으로 복구됐다. 인증 연결 실패를 만료로 오인하거나 signOut하지 않도록 503/일시 오류 안내 및 쿠키 보존 처리를 추가했다.
+- 확인된 것: 인증 장애·무효 JWT·역할 검증 회귀 5개, 최종 ESLint·production build/TypeScript, DB lint가 통과했다. local/remote migration 30건이 일치한다. 추가 rollback SQL로 운영자 배정 보존·중복 차단, 학생 Draft/타학생 비노출, 학생 mutation·anon RPC 차단을 확인했다.
+- 확인된 것: 최종 production 서버 `127.0.0.1:3000`에서 실제 운영자/학생의 역할 API·보호 페이지가 모두 HTTP 200, 비인증 역할 API는 401로 확인됐다.
+- 제한: pgTAP/Docker와 브라우저 클릭 자동화 대신 실제 원격 두 세션·rollback SQL 및 로컬 HTTP 인증 검증을 사용했다. 재실행 방법은 `supabase/tests/concurrency/README.md`, `scripts/README.md`에 기록했다.
+
+## 2026-09-04 — Codex — 중립 lesson 원격 DB 검증
+
+- 확인된 것: production build 재확인 통과. `next start`를 127.0.0.1:3000에서 실행하고 운영자 로그인 HTTP 200 응답을 확인했다.
+- 확인된 것: 신규 모델, lint 정리, rollback 검증 migration 3건을 원격에 적용했다. local/remote 28개 migration이 일치하며 DB lint는 경고 없이 통과했다.
+- 확인된 것: 원격 rollback 검증에서 Scheduled 차감, Draft 제외, 안전한 Scheduled→Draft/취소/soft-unassign 반환, assignment hard delete 차단, rental의 enrollment 전체기간 누적, 기존 makeup source 정합성을 확인했다. 검증 데이터는 subtransaction으로 rollback했다.
+- 확인된 것: 실제 operator/student/anon 세션으로 본인 quota RPC, 타학생 및 adjustment 감사 row 비노출, 학생 mutation 차단, anon RPC 차단을 확인했다.
+- 제한: pgTAP CLI는 Docker가 없어 실행하지 못해 rollback 검증으로 대체했다. 실제 동시 요청 부하 테스트는 별도 미실행이다. commit/push/PR/merge 및 Final Review 전환은 하지 않았다.
+
+## 2026-09-02 — Codex — 중립 lesson과 학생 프로그램 이용권
+
+- 한 일: lesson 프로그램 분류와 exact-match 경로를 제거하고, 학생별 assignment가 선택한 `student_program_id`를 이용권으로 사용하도록 일정 RPC/UI를 전환했다. Draft는 quota에서 제외하고 Scheduled 확정·신규 배정·월 이동을 DB lock 아래 검증하며, 시작 전이고 attendance/feedback이 없는 배정만 반환되도록 보호했다. 출결·피드백 생성과 반환도 lesson row lock으로 직렬화하고 assignment hard delete를 차단했다.
+- 한 일: `base_allowance_count`, append-only `student_program_allowance_adjustments`, quota 집계 view, 운영자 조정 UI를 추가했다. 기존 rental 제공량은 추측하지 않고 미설정으로 보존하며 설정 전 배정을 막는다.
+- 한 일: 학생 화면에는 adjustment 감사 row를 노출하지 않고 본인 집계만 반환하는 전용 RPC를 연결해 일반·보강 잔여량과 일정별 사용 이용권을 표시했다.
+- 한 일: makeup에 immutable `source_student_program_id`를 backfill하고 replacement assignment가 source enrollment를 사용하도록 생성·배정·재배정 함수를 변경했다. stopped source도 허용하고 lesson 프로그램 비교는 제거했다.
+- 확인된 것: `npx tsc --noEmit`, ESLint, production build가 통과했다. 로컬 Supabase CLI/config가 없어 migration 실제 적용과 DB lint는 아직 수행하지 못했다.
+- 다음 할 일 / 막힌 것: 연결 DB에서 preflight를 다시 확인한 뒤 migration 적용, pgTAP, operator/student RLS와 동시 quota 요청을 검증해야 한다.
+
 ## 2026-09-02 — Codex — PR #21 운영 화면 UX 개선
 
 - 한 일: 학생 신규 등록의 현재 입력 비밀번호를 포인터 또는 키보드로 누르는 동안만 표시하고, release/leave/cancel/blur에서 즉시 숨기는 접근 가능한 보기 버튼을 추가했다.
