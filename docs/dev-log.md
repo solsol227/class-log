@@ -25,7 +25,8 @@
 - 한 일: 대체 일정 출결 완료와 일정 없이 수동 완료를 모두 기존 `completed` 상태와 완료 목록에 함께 표시하도록 구현했다. append-only migration으로 `makeup_lessons.completion_method`, 수동 완료 처리자/시각/메모 컬럼, `complete_makeup_without_schedule`, `restore_manual_makeup_completion` RPC를 추가했다. 완료·복구 시점의 완료 경로와 메모는 별도의 `makeup_lesson_events` row에도 저장한다.
 - 확인된 것: 수동 완료는 replacement lesson/attendance/assignment 없이 requested row를 completed로 바꾸고, 복구는 같은 row의 현재 완료 필드를 비운 뒤 requested로 되돌린다. 과거 처리자·시각·메모는 append-only event에 남으므로 이후 대체 일정으로 자동 완료되어도 서로 섞이지 않는다. 대체 일정 출결 완료는 `completion_method = replacement_attendance`로 판정하며 복구 버튼을 노출하지 않는다.
 - 검증: 대상 ESLint, TypeScript, production build, `git diff --check`를 통과했다. PGlite에 기존 migration을 포함한 33개를 순서대로 적용하고, 수동 완료·동일 row 복구·자동 완료 복구 차단·이력 보존·학생 호출 차단을 포함한 50개 회귀 검증을 통과했다. 같은 정책의 PR26 pgTAP SQL도 추가했다. 전체 lint는 `.worktrees/**/.next` 생성물을 함께 검사하는 기존 설정 때문에 실패했다.
-- 다음 할 일 / 막힌 것: `codex/pr26-makeup-completion-policy` 브랜치를 생성했다. 원격 migration은 적용하지 않았다. Supabase CLI/Docker 기반 DB lint와 실제 operator/student 세션 RLS 검증은 아직 필요하다.
+- 원격 확인: `codex/pr26-makeup-completion-policy` 브랜치를 push하고 PR #26을 생성했다. 원격 32개 migration과 로컬 기존 이력이 일치하고 PR26 하나만 local-only인 것을 확인했다. 원격 적용 dry-run은 PR26 파일 하나만 표시했고 현재 원격 public/private/extensions schema DB lint는 오류가 없었다.
+- 다음 할 일 / 막힌 것: 연결된 Supabase 프로젝트가 테스트/스테이징인지 운영인지 이름만으로 구분되지 않아 migration은 적용하지 않았다. 환경 확인 후 적용하고 실제 operator/student 세션 RLS를 검증해야 한다.
 
 ## 2026-09-07 — Codex — PR25 일정관리 목록 필터·정렬 UX
 

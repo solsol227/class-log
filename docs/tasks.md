@@ -206,5 +206,6 @@
 - [x] PR26 DB 회귀 테스트 SQL 작성
 - [x] 대상 ESLint / TypeScript / production build / diff check
 - [x] PGlite에서 33개 migration 및 PR26 포함 50개 회귀 검증
-- [ ] 원격 migration 적용 및 DB lint
+- [x] 원격 32개 migration 일치·PR26 dry-run·현재 schema DB lint
+- [ ] 연결 환경 확인 후 원격 migration 적용
 - [ ] operator/student RLS 회귀 검증
