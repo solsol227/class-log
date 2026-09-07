@@ -27,6 +27,7 @@ type ProfileFieldErrors = {
 
 export type StudentProfileActionState = {
   fieldErrors: ProfileFieldErrors;
+  success?: boolean;
   formError?: string;
 };
 
@@ -182,7 +183,6 @@ export async function updateStudentProfile(
   const acquisitionSource = optionalText(formData.get("acquisition_source"));
   const joinedMonthInput = String(formData.get("joined_month") ?? "").trim();
   const specialNotes = optionalText(formData.get("special_notes"));
-  const programChanges = parseProgramChanges(formData.get("program_changes"));
   let name = "";
 
   try {
@@ -209,9 +209,6 @@ export async function updateStudentProfile(
   if (acquisitionSource && !ACQUISITION_SOURCES.includes(acquisitionSource as (typeof ACQUISITION_SOURCES)[number])) {
     fieldErrors.acquisitionSource = "유입경로를 다시 선택해 주세요.";
   }
-  if (!programChanges) {
-    fieldErrors.programs = "이용프로그램 변경 내용을 다시 확인해 주세요.";
-  }
 
   let joinedMonth: string | null = null;
   if (joinedMonthInput) {
@@ -234,7 +231,7 @@ export async function updateStudentProfile(
     .maybeSingle();
 
   if (studentError || !student) {
-    if (studentError) console.error(studentError);
+    if (studentError) console.error({ code: studentError.code });
     return { fieldErrors: {}, formError: "학생 정보를 찾을 수 없습니다." };
   }
 
@@ -246,7 +243,7 @@ export async function updateStudentProfile(
     .maybeSingle();
 
   if (duplicateError) {
-    console.error(duplicateError);
+    console.error({ code: duplicateError.code });
     return { fieldErrors: {}, formError: "학생 정보를 확인하지 못했습니다." };
   }
   if (duplicate) {
@@ -268,7 +265,7 @@ export async function updateStudentProfile(
     !authData.user ||
     authData.user.app_metadata?.role !== "student"
   ) {
-    if (authError) console.error(authError);
+    if (authError) console.error({ code: authError.code });
     return { fieldErrors: {}, formError: "학생 로그인 계정을 안전하게 확인하지 못했습니다." };
   }
 
@@ -279,13 +276,13 @@ export async function updateStudentProfile(
       { email: studentNicknameToAuthEmail(name), email_confirm: true },
     );
     if (authUpdateError) {
-      console.error(authUpdateError);
+      console.error({ code: authUpdateError.code });
       return { fieldErrors: {}, formError: "이름과 로그인 정보를 변경하지 못했습니다." };
     }
   }
 
   const { data: updated, error: updateError } = await supabase.rpc(
-    "save_student_profile_and_programs",
+    "save_student_profile",
     {
       target_student_id: studentId,
       profile_nickname: name,
@@ -295,7 +292,6 @@ export async function updateStudentProfile(
       profile_acquisition_source: acquisitionSource,
       profile_joined_month: joinedMonth,
       profile_special_notes: specialNotes,
-      program_changes: programChanges,
     },
   );
 
@@ -303,21 +299,24 @@ export async function updateStudentProfile(
     ? updated as Record<string, unknown>
     : null;
   if (updateError || result?.studentId !== studentId || result.profileUpdated !== true) {
-    if (updateError) console.error(updateError);
+    if (updateError) console.error({ code: updateError.code });
     if (nameChanged) {
       const { error: rollbackError } = await adminClient.auth.admin.updateUserById(
         student.auth_user_id,
         { email: studentNicknameToAuthEmail(student.nickname), email_confirm: true },
       );
-      if (rollbackError) console.error("학생 로그인 정보 복구에 실패했습니다.", rollbackError);
+      if (rollbackError) {
+        console.error("학생 로그인 정보 복구에 실패했습니다.", { code: rollbackError.code });
+        return { fieldErrors: {}, formError: "기본정보 저장과 로그인 정보 복구에 실패했습니다. 운영자에게 계정 확인을 요청해 주세요." };
+      }
     }
     const formError = updateError?.code === "23505"
-      ? "이미 이용 중인 프로그램이 있거나 같은 이름의 학생이 있습니다. 내용을 다시 확인해 주세요."
+      ? "이미 같은 이름의 학생이 있습니다. 이름을 다시 확인해 주세요."
       : updateError?.code === "23514"
-        ? "프로그램 중단일을 확인해 주세요. 미래 일정 배정이 남아 있다면 해당 배정을 먼저 해제해야 합니다."
+        ? "학생 기본정보 입력값을 다시 확인해 주세요."
         : updateError?.code === "P0002"
-          ? "학생 또는 프로그램 정보가 변경되었습니다. 새로고침 후 다시 시도해 주세요."
-          : "학생정보와 이용프로그램을 저장하지 못했습니다. 변경 내용은 반영되지 않았습니다.";
+          ? "학생 정보가 변경되었습니다. 새로고침 후 다시 시도해 주세요."
+          : "학생 기본정보를 저장하지 못했습니다.";
     return { fieldErrors: {}, formError };
   }
 
@@ -326,7 +325,39 @@ export async function updateStudentProfile(
   revalidatePath("/operator/schedules");
   revalidatePath("/operator/schedules/new");
   revalidatePath("/student/schedule");
-  redirect(`/operator/students/${studentId}?updated=1`);
+  return { fieldErrors: {}, success: true };
+}
+
+export async function updateStudentPrograms(
+  studentId: string,
+  _previousState: StudentProfileActionState,
+  formData: FormData,
+): Promise<StudentProfileActionState> {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  const programChanges = parseProgramChanges(formData.get("program_changes"));
+  if (!UUID_PATTERN.test(studentId) || !programChanges) {
+    return { fieldErrors: { programs: "이용프로그램 변경 내용을 다시 확인해 주세요." } };
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("save_student_programs", {
+    target_student_id: studentId, program_changes: programChanges,
+  });
+  if (error || data?.studentId !== studentId || data?.programsUpdated !== true) {
+    if (error) console.error({ code: error.code });
+    return { fieldErrors: {}, formError: error?.code === "23505"
+      ? "이미 이용 중인 프로그램입니다. 새로고침 후 확인해 주세요."
+      : error?.code === "23514"
+        ? "중단일과 미래 일정 배정을 확인해 주세요. 프로그램 변경은 모두 반영되지 않았습니다."
+        : error?.code === "P0002"
+          ? "프로그램 정보가 변경되었습니다. 새로고침 후 확인해 주세요."
+          : "이용프로그램을 저장하지 못했습니다. 프로그램 변경은 모두 반영되지 않았습니다." };
+  }
+  revalidatePath("/operator/students");
+  revalidatePath(`/operator/students/${studentId}`);
+  revalidatePath("/operator/schedules");
+  revalidatePath("/operator/schedules/new");
+  revalidatePath("/student/schedule");
+  return { fieldErrors: {}, success: true };
 }
 
 export async function deleteStudent(
@@ -347,7 +378,7 @@ export async function deleteStudent(
     .eq("id", studentId)
     .maybeSingle();
   if (studentError || !student) {
-    if (studentError) console.error(studentError);
+    if (studentError) console.error({ code: studentError.code });
     return { formError: "학생 정보를 찾을 수 없습니다." };
   }
 
@@ -362,7 +393,7 @@ export async function deleteStudent(
     student.auth_user_id,
   );
   if (authError || !authData.user) {
-    if (authError) console.error(authError);
+    if (authError) console.error({ code: authError.code });
     return { formError: "학생 로그인 계정을 확인하지 못해 삭제하지 않았습니다." };
   }
   if (authData.user.app_metadata?.role !== "student") {

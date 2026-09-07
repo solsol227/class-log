@@ -45,7 +45,15 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   if (!UUID_PATTERN.test(lessonId)) return <ScheduleUnavailable />;
 
   const supabase = await createSupabaseServerClient();
-  const { data: lesson, error } = await supabase.from("lessons").select("id, title, starts_at, ends_at, location, notes, status").eq("id", lessonId).maybeSingle();
+  const categorizedLessonResult = await supabase.from("lessons").select("id, title, starts_at, ends_at, location, notes, status, schedule_category").eq("id", lessonId).maybeSingle();
+  const legacyLessonResult = categorizedLessonResult.error?.code === "42703"
+    ? await supabase.from("lessons").select("id, title, starts_at, ends_at, location, notes, status").eq("id", lessonId).maybeSingle()
+    : null;
+  const lesson = categorizedLessonResult.data
+    ?? (legacyLessonResult?.data ? { ...legacyLessonResult.data, schedule_category: null } : null);
+  const error = categorizedLessonResult.error?.code === "42703"
+    ? legacyLessonResult?.error
+    : categorizedLessonResult.error;
   if (error || !lesson) {
     if (error) console.error(error);
     return <ScheduleUnavailable />;
@@ -159,6 +167,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
         lesson={{
           id: lesson.id,
           title: lesson.title,
+          category: lesson.schedule_category,
           dateInput: startsAtInput.date,
           startTimeInput: startsAtInput.time,
           endTimeInput: endsAtInput.time,

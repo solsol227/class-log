@@ -24,7 +24,7 @@ declare
   added integer := 0;
 begin
   fixture := public.save_lesson_with_assignments(null, 'rollback assignment preservation',
-    '2096-02-02 10:00+09', '2096-02-02 11:00+09', '', '', 'draft', '{}'::uuid[]);
+    '2096-02-02 10:00+09', '2096-02-02 11:00+09', '', '', 'draft', '{}'::uuid[], 'weekend');
   insert into review_lesson values (fixture);
   for item in select distinct on (student_id) * from review_context order by student_id limit 2 loop
     perform public.assign_student_to_lesson(fixture, item.student_id, item.program_id);

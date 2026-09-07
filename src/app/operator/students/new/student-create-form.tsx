@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   createStudent,
@@ -71,6 +71,20 @@ function FormField({
 function PasswordField({ error }: { error?: string }) {
   const [revealed, setRevealed] = useState(false);
   const errorId = "password-error";
+  useEffect(() => {
+    const hide = () => setRevealed(false);
+    const onVisibility = () => { if (document.hidden) hide(); };
+    window.addEventListener("blur", hide);
+    window.addEventListener("pointerup", hide);
+    window.addEventListener("pointercancel", hide);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("blur", hide);
+      window.removeEventListener("pointerup", hide);
+      window.removeEventListener("pointercancel", hide);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   function hidePassword() {
     setRevealed(false);
@@ -94,7 +108,15 @@ function PasswordField({ error }: { error?: string }) {
         <button
           type="button"
           aria-label="누르고 있는 동안 비밀번호 보기"
-          onPointerDown={() => setRevealed(true)}
+          aria-pressed={revealed}
+          aria-controls="password"
+          onPointerDown={(event) => { if (event.isPrimary && event.button === 0) setRevealed(true); }}
+          onPointerMove={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) hidePassword();
+          }}
+          onLostPointerCapture={hidePassword}
+          onContextMenu={(event) => { event.preventDefault(); hidePassword(); }}
           onPointerUp={hidePassword}
           onPointerLeave={hidePassword}
           onPointerCancel={hidePassword}
@@ -105,7 +127,7 @@ function PasswordField({ error }: { error?: string }) {
             }
           }}
           onKeyUp={(event) => {
-            if (event.key === " " || event.key === "Enter") hidePassword();
+            if (event.key === " " || event.key === "Enter") { event.preventDefault(); hidePassword(); }
           }}
           onBlur={hidePassword}
           className="absolute inset-y-1 right-1 flex w-11 touch-manipulation items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[#e5f2f0] hover:text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]"

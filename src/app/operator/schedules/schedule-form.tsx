@@ -6,8 +6,11 @@ import { createSchedule, updateSchedule, type ScheduleActionState } from "./acti
 import { ScheduleDateTimeFields, type ScheduleDateTimeFieldsHandle } from "./schedule-date-time-fields";
 import { StudentMultiSelectField, type StudentSelectOption } from "./student-multi-select-field";
 
+import { SCHEDULE_CATEGORIES, SCHEDULE_CATEGORY_LABELS } from "@/lib/lessons/category";
+
 const INITIAL_STATE: ScheduleActionState = { fieldErrors: {} };
 type ScheduleValues = {
+  category?: string;
   title: string;
   date: string;
   startTime: string;
@@ -42,6 +45,15 @@ export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel
   return (
     <form id={formId} action={formAction} onSubmit={(event) => { if (dateTimeFieldsRef.current && !dateTimeFieldsRef.current.validate()) event.preventDefault(); }} className="space-y-5" noValidate>
       {state.formError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{state.formError}</p> : null}
+      <div>
+        <label htmlFor="schedule-category" className="mb-2 block text-sm font-bold">일정 카테고리{mode === "create" ? " (필수)" : ""}</label>
+        <select id="schedule-category" name="schedule_category" defaultValue={values?.category ?? ""} required={mode === "create"} aria-invalid={Boolean(state.fieldErrors.category)} aria-describedby="schedule-category-help schedule-category-error" className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4">
+          <option value="">{mode === "create" ? "카테고리 선택" : "미분류"}</option>
+          {SCHEDULE_CATEGORIES.map((category) => <option key={category} value={category}>{SCHEDULE_CATEGORY_LABELS[category]}</option>)}
+        </select>
+        <p id="schedule-category-help" className="mt-2 text-sm text-[var(--muted)]">일정을 분류하는 정보이며 학생의 이용권 종류와 달라도 배정할 수 있습니다.</p>
+        <p id="schedule-category-error" className="mt-2 text-sm font-semibold text-rose-800">{state.fieldErrors.category}</p>
+      </div>
       <FormInput id="schedule-title" label="제목" name="title" defaultValue={values?.title} error={state.fieldErrors.title} />
       <div><label htmlFor="schedule-status" className="mb-2 block text-sm font-bold">저장 상태</label><select id="schedule-status" name="status" defaultValue={values?.status === "draft" ? "draft" : "scheduled"} className="h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4"><option value="scheduled">확정 일정</option><option value="draft">Draft</option></select></div>
       <p className="rounded-xl bg-[#f4f8f7] px-4 py-3 text-sm text-[var(--muted)]">Draft 배정은 이용 횟수에 포함되지 않으며, 확정할 때 이용권을 검증합니다.</p>

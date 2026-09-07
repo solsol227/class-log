@@ -57,7 +57,7 @@ begin
     '',
     '',
     'draft',
-    array[ctx.student_program_id]
+    array[ctx.student_program_id], 'weekend'
   );
 
   if not exists (
@@ -94,7 +94,7 @@ begin
       '',
       '',
       'scheduled',
-      array[ctx.student_program_id]
+      array[ctx.student_program_id], 'weekend'
     );
   end loop;
 
@@ -107,7 +107,7 @@ begin
       '',
       '',
       'scheduled',
-      array[ctx.student_program_id]
+      array[ctx.student_program_id], 'weekend'
     );
   exception when check_violation then
     blocked := true;
