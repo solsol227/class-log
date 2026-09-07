@@ -20,6 +20,12 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-09-07 — Codex — PR25 일정관리 목록 필터·정렬 UX
+
+- 한 일: 최신 `origin/main` 기준 `feat/schedule-list-filters` 브랜치에서 운영자 일정관리 목록의 카테고리와 상태를 개수 포함 다중 선택 버튼으로 정리했다. 월과 `sort=asc|desc` 정렬은 선택 즉시 적용되며, 제목 검색과 별도 적용 버튼은 제거했다.
+- 확인된 것: 같은 필터 그룹의 선택값은 OR, 카테고리와 상태 사이는 AND로 적용하며 반복 query로 선택을 유지한다. 카테고리 개수는 현재 상태·월 범위, 상태 개수는 현재 카테고리·월 범위로 계산한다. 정렬은 DB 조회 order 단계에서 `starts_at`, `ends_at`, `id` 순으로 적용하며 필터 개수에는 영향을 주지 않는다. DB schema, migration, RLS, 사용자 데이터는 변경하지 않았다.
+- 검증: TypeScript, 작업 tree 기준 ESLint, production build 통과. 로컬 `.worktrees/`의 기존 병렬 worktree 빌드 산출물 때문에 `npm run lint` 원형 명령은 해당 보관 폴더까지 훑어 실패해, `.worktrees/**`만 제외한 ESLint로 실제 작업 tree를 검증했다.
+
 ## 2026-09-04 — Codex — PR #23 Final Review 및 병합 승인
 
 - 한 일: 사용자 UI 확인과 커밋·푸시·병합 승인을 받았다. 최신 origin/main `b95ac71` 포함 여부와 전체 변경을 최종 리뷰했다. GitHub PR은 아직 없어 push 후 생성하며 일반 merge로 마무리한다.
