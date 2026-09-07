@@ -65,7 +65,7 @@ try {
     }
     await db.exec(await readFile(new URL(file, migrationDir), 'utf8'));
   }
-  check(files.length === 32, 'all 32 append-only migrations loaded');
+  check(files.length === 33, 'all 33 append-only migrations loaded');
   stage = 'category and assignment regression';
   await claims('operator', ids.operator);
   await db.exec('set role authenticated');
@@ -109,6 +109,54 @@ try {
   for (let day = 7; day <= 9; day++) await save(null, 'trial', [monthly], 'quota fixture', 'scheduled', '2096-02-0' + day);
   await blocked(() => save(null, 'weekend', [monthly], 'over quota', 'scheduled', '2096-02-10'), '23514', 'category never bypasses ordinary quota');
 
+  stage = 'PR26 makeup completion policy';
+  const manualSource = await save(null, 'trial', [monthly], 'manual completion source', 'scheduled', '2026-02-15');
+  await db.query("insert into public.attendance_records(lesson_id,student_id,status) values ($1,$2,'excused')", [manualSource, ids.a]);
+  const manualMakeup = await scalar('select id from public.makeup_lessons where original_lesson_id=$1', [manualSource]);
+  const assignmentCountBeforeManual = await scalar('select count(*)::int from public.lesson_assignments');
+  const adjustmentCountBeforeManual = await scalar('select count(*)::int from public.student_program_allowance_adjustments');
+  check(await scalar("select public.complete_makeup_without_schedule($1,'manual close')", [manualMakeup]) === manualMakeup, 'manual completion keeps the makeup row id');
+  check(await scalar(`select status='completed'
+    and completion_method='manual_without_schedule'
+    and completed_by=$2
+    and completed_at is not null
+    and completion_note='manual close'
+    and replacement_lesson_id is null
+    and replacement_attendance_record_id is null
+    and replacement_assignment_provenance is null
+    from public.makeup_lessons where id=$1`, [manualMakeup, ids.operator]), 'manual completion has no replacement records');
+  check(await scalar(`select count(*)::int=1 from public.makeup_lesson_events
+    where makeup_lesson_id=$1 and event_type='completed'
+      and completion_method='manual_without_schedule'
+      and completion_note='manual close' and actor_user_id=$2`, [manualMakeup, ids.operator]), 'manual completion metadata is appended to history');
+  check(await scalar('select public.restore_manual_makeup_completion($1)', [manualMakeup]) === manualMakeup, 'manual restore keeps the makeup row id');
+  check(await scalar(`select status='requested'
+    and completion_method is null and completed_by is null
+    and completed_at is null and completion_note is null
+    from public.makeup_lessons where id=$1`, [manualMakeup]), 'manual restore clears only current completion fields');
+  check(await scalar(`select count(*)::int=1 from public.makeup_lesson_events
+    where makeup_lesson_id=$1 and event_type='reopened'
+      and from_status='completed' and to_status='requested'
+      and completion_method='manual_without_schedule'
+      and completion_note='manual close' and actor_user_id=$2`, [manualMakeup, ids.operator]), 'manual restore preserves prior completion metadata in a new event row');
+  check(await scalar('select count(*)::int from public.makeup_lessons where id=$1', [manualMakeup]) === 1, 'manual restore creates no duplicate makeup row');
+  check(await scalar('select count(*)::int from public.lesson_assignments') === assignmentCountBeforeManual, 'manual completion and restore create no assignment');
+  check(await scalar('select count(*)::int from public.student_program_allowance_adjustments') === adjustmentCountBeforeManual, 'manual completion and restore create no allowance adjustment');
+
+  const automaticReplacement = await save(null, 'weekend', [], 'automatic replacement', 'scheduled', '2096-02-11');
+  await scalar('select public.schedule_makeup_lesson($1,$2)', [manualMakeup, automaticReplacement]);
+  const automaticAttendance = await scalar("insert into public.attendance_records(lesson_id,student_id,status) values ($1,$2,'present') returning id", [automaticReplacement, ids.a]);
+  check(await scalar(`select status='completed'
+    and completion_method='replacement_attendance'
+    and replacement_lesson_id=$2 and replacement_attendance_record_id=$3
+    and completed_by is null and completed_at is null and completion_note is null
+    from public.makeup_lessons where id=$1`, [manualMakeup, automaticReplacement, automaticAttendance]), 'replacement attendance completes through the existing completed status');
+  await blocked(() => scalar('select public.restore_manual_makeup_completion($1)', [manualMakeup]), 'P0002', 'automatic completion cannot be manually restored');
+  check(await scalar('select count(*)::int from public.attendance_records where id=$1', [automaticAttendance]) === 1, 'failed automatic restore preserves replacement attendance');
+  check(await scalar(`select count(*)::int=1 from public.makeup_lesson_events
+    where makeup_lesson_id=$1 and event_type='completed'
+      and completion_method='replacement_attendance' and completion_note is null`, [manualMakeup]), 'automatic completion path is appended to history');
+
   stage = 'independent profile/program transactions';
   const profileArgs = [ids.a, 'fixture-renamed', null, 25, null, null, null, 'profile note'];
   const profileSave = () => scalar('select public.save_student_profile($1,$2,$3,$4,$5,$6,$7,$8)', profileArgs);
@@ -142,6 +190,9 @@ try {
   await blocked(profileSave, '42501', 'student profile mutation denied');
   await blocked(() => programsSave({}), '42501', 'student programs mutation denied');
   await blocked(() => save(null, 'weekday'), '42501', 'student lesson mutation denied');
+  await blocked(() => scalar('select public.complete_makeup_without_schedule($1,null)', [manualMakeup]), '42501', 'student manual makeup completion denied');
+  check(!await scalar("select has_function_privilege('anon','public.complete_makeup_without_schedule(uuid,text)','EXECUTE')"), 'anonymous manual completion RPC denied');
+  check(!await scalar("select has_function_privilege('anon','public.restore_manual_makeup_completion(uuid)','EXECUTE')"), 'anonymous manual restore RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.save_student_programs(uuid,jsonb)','EXECUTE')"), 'anonymous programs RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.save_student_profile(uuid,text,text,integer,text,text,date,text)','EXECUTE')"), 'anonymous profile RPC denied');
   console.log(`PASS: ${files.length} migrations and ${passed} local PostgreSQL assertions. Synthetic in-memory data only.`);

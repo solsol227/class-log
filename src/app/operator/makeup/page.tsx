@@ -2,8 +2,10 @@ import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  completeMakeupWithoutSchedule,
   rescheduleMakeup,
   scheduleMakeup,
+  restoreManualMakeupCompletion,
 } from "./actions";
 import { MakeupReasonEditor } from "./makeup-reason-editor";
 
@@ -55,6 +57,8 @@ type MakeupNotices = {
   scheduled?: string;
   rescheduled?: string;
   reasonUpdated?: string;
+  manualCompleted?: string;
+  restored?: string;
 };
 
 function errorMessage(code?: string) {
@@ -66,6 +70,9 @@ function errorMessage(code?: string) {
   if (code === "same_replacement") return "현재 대체 일정과 다른 일정을 선택해 주세요.";
   if (code === "assignment_history") return "이전 대체 일정에 보존해야 할 출결 또는 피드백 기록이 있어 일정을 변경할 수 없습니다.";
   if (code === "state") return "보강 상태가 변경되었습니다. 현재 상태를 다시 확인해 주세요.";
+  if (code === "restore_state") return "대체 일정 출결로 완료된 보강은 보강 대기로 복구할 수 없습니다.";
+  if (code === "restore") return "보강 완료를 복구하지 못했습니다. 현재 상태를 확인해 주세요.";
+  if (code === "manual_complete") return "일정 없이 완료 처리하지 못했습니다. 현재 상태를 확인해 주세요.";
   if (code) return "보강 정보를 처리하지 못했습니다. 선택 항목과 현재 상태를 확인해 주세요.";
   return null;
 }
@@ -74,6 +81,8 @@ function successMessage(notices: MakeupNotices) {
   if (notices.reasonUpdated === "1") return "보강 사유를 저장했습니다.";
   if (notices.scheduled === "1") return "보강 일정을 배정했습니다.";
   if (notices.rescheduled === "1") return "보강 일정을 변경하고 보강이 만든 이전 학생 배정을 자동으로 정리했습니다.";
+  if (notices.manualCompleted === "1") return "보강을 일정 없이 완료 처리했습니다.";
+  if (notices.restored === "1") return "보강을 대기 상태로 복구했습니다.";
   return null;
 }
 
@@ -92,7 +101,7 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
   const [makeupsResult, studentsResult, lessonsResult, eventsResult, programsResult] = await Promise.all([
     supabase
       .from("makeup_lessons")
-      .select("id, attendance_record_id, replacement_attendance_record_id, source_student_program_id, student_id, original_lesson_id, replacement_lesson_id, reason, status, created_at")
+      .select("id, attendance_record_id, replacement_attendance_record_id, source_student_program_id, student_id, original_lesson_id, replacement_lesson_id, reason, status, created_at, completion_method, completed_at, completion_note")
       .order("created_at"),
     supabase.from("students").select("id, nickname").order("nickname"),
     supabase.from("lessons").select("id, title, starts_at, status").order("starts_at"),
@@ -216,6 +225,18 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                         <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">배정 가능한 Draft 또는 예정 일정이 없습니다.</p>
                       )}
                       <Link href="/operator/schedules/new" className="mt-2 block text-center text-sm font-bold underline">새 일정 생성</Link>
+                      <form action={completeMakeupWithoutSchedule.bind(null, item.id)} className="mt-4 space-y-2 border-t border-[var(--line)] pt-4">
+                        <label className="block text-sm font-bold" htmlFor={`complete-note-${item.id}`}>일정 없이 완료</label>
+                        <textarea
+                          id={`complete-note-${item.id}`}
+                          name="completion_note"
+                          rows={2}
+                          maxLength={500}
+                          className="w-full rounded-lg border px-3 py-2 text-sm"
+                          placeholder="선택 메모"
+                        />
+                        <button className="h-10 w-full rounded-lg border font-bold">일정 없이 완료</button>
+                      </form>
                     </>
                   ) : status === "scheduled" && item.replacement_lesson_id ? (
                     <div className="mt-4 space-y-4">
@@ -240,8 +261,23 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                     </div>
                   ) : status === "completed" ? (
                     <div className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-950">
-                      <p>대체: {lessonTitle(item.replacement_lesson_id)}</p>
-                      <p className="mt-1 font-bold">결과: {replacementStatus ? ATTENDANCE_LABELS[replacementStatus] ?? replacementStatus : "확인 불가"}</p>
+                      <p className="font-bold">
+                        {item.completion_method === "manual_without_schedule" ? "일정 없이 완료" : "대체 일정 완료"}
+                      </p>
+                      {item.completion_method === "manual_without_schedule" ? (
+                        <>
+                          {item.completed_at ? <p className="mt-1 text-[var(--muted)]">처리: {formatDateTime(item.completed_at)}</p> : null}
+                          {item.completion_note ? <p className="mt-2 whitespace-pre-wrap">{item.completion_note}</p> : null}
+                          <form action={restoreManualMakeupCompletion.bind(null, item.id)} className="mt-3">
+                            <button className="h-10 w-full rounded-lg border border-emerald-700 bg-white font-bold text-emerald-950">보강 대기로 복구</button>
+                          </form>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mt-1">대체: {lessonTitle(item.replacement_lesson_id)}</p>
+                          <p className="mt-1 font-bold">결과: {replacementStatus ? ATTENDANCE_LABELS[replacementStatus] ?? replacementStatus : "확인 불가"}</p>
+                        </>
+                      )}
                     </div>
                   ) : status === "cancelled" ? (
                     <div className="mt-4 rounded-lg bg-slate-100 p-3 text-sm text-slate-700">
