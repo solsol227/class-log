@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+import { isScheduleCategory } from "@/lib/lessons/category";
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE_PATTERN =
@@ -21,6 +23,7 @@ function scheduleRpcErrorMessage(code?: string) {
 }
 
 type ScheduleFieldErrors = {
+  category?: string;
   title?: string;
   date?: string;
   startsAt?: string;
@@ -32,6 +35,7 @@ export type ScheduleActionState = {
   fieldErrors: ScheduleFieldErrors;
   formError?: string;
   values?: {
+    category: string;
     title: string;
     date: string;
     startTime: string;
@@ -65,7 +69,8 @@ function toKstTimestamp(date: string, time: string) {
   return `${date}T${time}:00+09:00`;
 }
 
-function readScheduleForm(formData: FormData) {
+function readScheduleForm(formData: FormData, creating = false) {
+  const category = String(formData.get("schedule_category") ?? "");
   const rawTitle = String(formData.get("title") ?? "");
   const dateInput = String(formData.get("date") ?? "").trim();
   const startTimeInput = String(formData.get("start_time") ?? "").trim();
@@ -79,6 +84,7 @@ function readScheduleForm(formData: FormData) {
   const endsAt = toKstTimestamp(dateInput, endTimeInput);
   const fieldErrors: ScheduleFieldErrors = {};
 
+  if ((creating && !category) || (category && !isScheduleCategory(category))) fieldErrors.category = "일정 카테고리를 선택해 주세요.";
   if (!rawTitle.trim()) fieldErrors.title = "일정 제목을 입력해 주세요.";
   if (!DATE_PATTERN.test(dateInput) || !startsAt || !endsAt) {
     const dateMatch = DATE_PATTERN.exec(dateInput);
@@ -96,7 +102,7 @@ function readScheduleForm(formData: FormData) {
 
   return {
     fieldErrors,
-    values: { title: rawTitle, date: dateInput, startTime: startTimeInput, endTime: endTimeInput, location: rawLocation, notes: rawNotes, studentProgramIds, status },
+    values: { category, title: rawTitle, date: dateInput, startTime: startTimeInput, endTime: endTimeInput, location: rawLocation, notes: rawNotes, studentProgramIds, status },
     record: {
       title: rawTitle.trim(),
       starts_at: startsAt,
@@ -113,7 +119,7 @@ export async function createSchedule(
   formData: FormData,
 ): Promise<ScheduleActionState> {
   await requireAuthenticatedUser("/login/operator", "operator");
-  const parsed = readScheduleForm(formData);
+  const parsed = readScheduleForm(formData, true);
   if (Object.keys(parsed.fieldErrors).length > 0) {
     return { fieldErrors: parsed.fieldErrors, values: parsed.values };
   }
@@ -122,11 +128,12 @@ export async function createSchedule(
   const { data: lessonId, error } = await supabase.rpc("save_lesson_with_assignments", {
     lesson_id: null, lesson_title: parsed.record.title, lesson_starts_at: parsed.record.starts_at,
     lesson_ends_at: parsed.record.ends_at, lesson_location: parsed.record.location ?? "", lesson_notes: parsed.record.notes ?? "",
+    lesson_category: parsed.values.category || null,
     lesson_status: parsed.record.status, selected_student_program_ids: parsed.values.studentProgramIds,
   });
 
   if (error || !lessonId) {
-    if (error) console.error(error);
+    if (error) console.error({ code: error.code });
     return { fieldErrors: {}, formError: scheduleRpcErrorMessage(error?.code), values: parsed.values };
   }
 
@@ -151,7 +158,7 @@ export async function updateSchedule(
   const { data: lesson, error: lookupError } = await supabase.from("lessons").select("id, status").eq("id", lessonId).maybeSingle();
 
   if (lookupError || !lesson) {
-    if (lookupError) console.error(lookupError);
+    if (lookupError) console.error({ code: lookupError.code });
     return { fieldErrors: {}, formError: "일정과 배정 정보를 확인하지 못했습니다." };
   }
   if (lesson.status === "cancelled") {
@@ -161,11 +168,12 @@ export async function updateSchedule(
   const { data: updated, error } = await supabase.rpc("save_lesson_with_assignments", {
     lesson_id: lessonId, lesson_title: parsed.record.title, lesson_starts_at: parsed.record.starts_at,
     lesson_ends_at: parsed.record.ends_at, lesson_location: parsed.record.location ?? "", lesson_notes: parsed.record.notes ?? "",
+    lesson_category: parsed.values.category || null,
     lesson_status: parsed.record.status, selected_student_program_ids: parsed.values.studentProgramIds,
   });
 
   if (error || !updated) {
-    if (error) console.error(error);
+    if (error) console.error({ code: error.code });
     return { fieldErrors: {}, formError: scheduleRpcErrorMessage(error?.code), values: parsed.values };
   }
 
@@ -288,7 +296,7 @@ export async function deleteSchedule(
 
   const { data: deleted, error } = await supabase.from("lessons").delete().eq("id", lessonId).select("id").maybeSingle();
   if (error || !deleted) {
-    if (error) console.error(error);
+    if (error) console.error({ code: error.code });
     return { formError: error?.code === "23503" ? "연결된 기록이 있어 일정을 삭제할 수 없습니다. 관련 기록을 먼저 확인해 주세요." : "일정을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 

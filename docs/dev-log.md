@@ -161,3 +161,13 @@
 - 한 일: `20260825220000_harden_security_definer_helpers.sql`을 적용하고 PR #15를 main에 병합했다.
 - 확인된 것: `rls_auto_enable()`은 `SECURITY DEFINER`, `search_path=pg_catalog`을 유지하면서 외부 execute 권한을 제거했다. `current_student_id()`는 private schema로 이동하고 authenticated execute 및 기존 RLS dependency를 유지했다. local/remote migration 6개 일치, `supabase db lint`, `npm run lint`, `npm run build`, `git diff --check` 통과.
 - 다음 할 일 / 막힌 것: Security Advisor의 `auth_leaked_password_protection` 1건은 Supabase Auth Dashboard 설정으로 별도 처리한다.
+
+## 2026-09-04 — PR24 운영 UX와 일정 카테고리
+
+- 기준: PR22 b95ac71, PR23 13f1365 병합 확인. 기존 main checkout과 취소된 조사 worktree를 보존하고 .worktrees/operator-ux의 feat/operator-ux-and-schedule-categories에서 구현했다. 취소된 배정 오류 조사는 하지 않았다.
+- 구현: 일정 운영 카테고리 선택·미분류·배지·category/status/month/q 필터, 기본정보/프로그램 독립 form과 전용 RPC, Draft 취소 버튼 숨김. 기존 새 일정 링크를 유지하고 비밀번호 보기 상태/창 blur/모바일 경계 이탈 처리를 보완했다. 같은 Supabase를 쓰는 Vercel 전환을 위해 기존 RPC 함수는 호환 경로로 유지하고 새 코드 참조만 제거했다. Migration 미적용 상태의 42703에 한해서 일정 목록·상세가 기존 컬럼으로 재조회되어 미분류로 열리도록 호환했다.
+- 데이터 보호: 신규 migration 20260904030000 하나만 추가. 기존 일정 NULL 유지, backfill 없음. 일정 metadata-only 저장은 배정·출결·보강·quota를 수정하지 않으며 프로그램 변경 묶음은 transaction을 유지한다. Auth 이메일 변경과 실패 복구는 기본정보 action에 유지한다.
+- 검증: ESLint, tsc --noEmit --incremental false, production build, diff check 통과. 원격 기존 schema DB lint 무경고. PGlite의 가상 Auth/role bootstrap과 합성 데이터로 기존 31개+신규 1개 migration 전체 실행, 34개 회귀 검증 통과. SQL 조건식 문법 오류를 로컬 실행에서 발견·수정했다.
+- 원격 적용: 2026-09-07 사용자 승인 후 dry-run에서 신규 migration 한 건만 확인하고 적용했다. 적용 후 local/remote 32개 일치, DB lint 무경고, nullable 컬럼·CHECK·INSERT trigger·구/신 RPC 병존을 읽기 전용으로 확인했다. 기존 일정 12건은 모두 NULL(미분류)로 유지했으며 사용자 row mutation, backfill, seed, history repair는 실행하지 않았다.
+- 한계: 실제 Auth 이메일 변경/복구와 migration 적용 후 브라우저·모바일 입력, 동시 두 DB 세션은 미실행이다. 기존 pgTAP/동시성 fixture의 새 카테고리 입력만 갱신했고 해당 테스트 파일 전체는 실행하지 않았다.
+- 다음: 사용자가 migration 적용 후 브라우저 흐름을 확인한다. commit/push/PR/merge 없음.

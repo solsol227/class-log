@@ -34,7 +34,7 @@ begin
   saved := public.save_lesson_with_assignments(
     null, 'rollback concurrency verification',
     '2098-01-02 10:00+09', '2098-01-02 11:00+09', '', '', 'scheduled',
-    array[pair.low_program, pair.high_program]
+    array[pair.low_program, pair.high_program], 'weekday'
   );
   if not exists (select 1 from public.lessons where id = saved and status = 'scheduled') then
     raise exception 'Concurrent save did not create its scheduled lesson.';

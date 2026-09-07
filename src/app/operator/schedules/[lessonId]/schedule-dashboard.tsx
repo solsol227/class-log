@@ -1,5 +1,6 @@
 "use client";
 
+import { ScheduleCategoryBadge } from "@/components/schedule-category-badge";
 import { useState } from "react";
 import { ScheduleForm } from "../schedule-form";
 import type { StudentSelectOption } from "../student-multi-select-field";
@@ -9,6 +10,7 @@ import { RosterAttendanceForm } from "./roster-attendance-form";
 
 type Lesson = {
   id: string;
+  category: string | null;
   title: string;
   dateInput: string;
   startTimeInput: string;
@@ -41,14 +43,15 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm font-bold text-[var(--accent-strong)]">일정 정보</p>
+            <ScheduleCategoryBadge category={lesson.category} />
             <span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{lesson.statusLabel}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {lesson.status === "draft" ? <ConfirmDraftForm lessonId={lesson.id} /> : null}
           {canEdit && !editing ? <button type="button" onClick={() => setEditing(true)} className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] active:translate-y-px">수정</button> : null}
           {canEdit && editing ? <button type="submit" form={editFormId} className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px">저장</button> : null}
-          {canEdit && !editing ? <CancelScheduleForm lessonId={lesson.id} /> : null}
+          {canEdit && lesson.status !== "draft" && !editing ? <CancelScheduleForm lessonId={lesson.id} /> : null}
           <DeleteScheduleForm lessonId={lesson.id} />
         </div>
       </div>
@@ -57,7 +60,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
         <div className="mt-8 border-t border-[var(--line)] pt-7">
           <h2 className="text-2xl font-bold">일정 수정</h2>
           {lesson.status === "completed" ? <p className="mt-3 text-sm text-[var(--muted)]">완료된 일정도 정보와 학생 배정을 수정할 수 있습니다.</p> : null}
-          <div className="mt-5"><ScheduleForm mode="edit" lessonId={lesson.id} formId={editFormId} initialValues={{ title: lesson.title, date: lesson.dateInput, startTime: lesson.startTimeInput, endTime: lesson.endTimeInput, location: lesson.location ?? "", notes: lesson.notes ?? "", studentProgramIds: assignedStudents.map((student) => student.studentProgramId), status: lesson.status }} students={studentOptions} onCancel={() => setEditing(false)} /></div>
+          <div className="mt-5"><ScheduleForm mode="edit" lessonId={lesson.id} formId={editFormId} initialValues={{ category: lesson.category ?? "", title: lesson.title, date: lesson.dateInput, startTime: lesson.startTimeInput, endTime: lesson.endTimeInput, location: lesson.location ?? "", notes: lesson.notes ?? "", studentProgramIds: assignedStudents.map((student) => student.studentProgramId), status: lesson.status }} students={studentOptions} onCancel={() => setEditing(false)} /></div>
         </div>
       ) : (
         <>

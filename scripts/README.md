@@ -25,3 +25,23 @@ SSR 서명 검증, 로컬 역할 API, 보호 페이지 HTTP 응답 및 비인증
 로컬 서버의 외부 네트워크가 차단되면 브라우저의 직접 로그인은 성공해도
 서버의 Auth 검증은 실패할 수 있다. 서버에도 Supabase 연결을 허용해야 하며,
 토큰 검증을 생략하는 방식으로 우회하지 않는다.
+
+## PR24 격리 DB 회귀 검사
+
+앱 package.json/lockfile 변경 없이 임시 무시 폴더에 PGlite를 설치한다.
+
+~~~powershell
+npm install --prefix .temp/pr24-validation --no-save --package-lock=false @electric-sql/pglite@0.3.14
+node scripts/test-operator-ux-db.mjs
+~~~
+
+메모리 PostgreSQL만 사용하며 환경변수·원격 DB·실제 사용자 데이터를 읽지 않는다.
+최소 Supabase Auth/role 플랫폼 구성을 bootstrap하고 저장소의 32개 migration을
+순서대로 실행한다. 기존 migration 내 데이터 기반 검증에는 합성 학생/이용권을 사용한다.
+34개 assertion으로 신규 분류 필수, 기존 NULL 수정, 다른 이용권 배정, quota/충돌,
+보강 연결 불변, Draft 삭제 보호, 확정 취소, 저장 영역 분리, 프로그램 transaction/이력,
+학생 RLS와 RPC 권한을 검증한다. Supabase Auth 서비스, PostgREST schema cache,
+브라우저 입력·레이아웃과 두 세션 경합은 이 테스트에 포함되지 않는다.
+
+supabase/tests/operator_ux_preflight.sql은 별도의 읽기 전용 원격 점검 SQL이며
+건수와 컬럼·trigger·RPC·RLS metadata만 조회한다.

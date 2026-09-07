@@ -179,3 +179,17 @@
 - [x] 직원 저장/삭제 버튼 모바일 포함 한 줄 배치
 - [x] 보강 원수업 일정 카드 전체 링크
 - [ ] production UI 사용자 확인
+
+## PR24 — 운영 UX 및 일정 카테고리 (코드·원격 migration 완료, 사용자 확인 대기)
+
+- [x] 최신 main(PR22/23 병합) 기준 독립 worktree
+- [x] 일정 카테고리 생성·수정·미분류 배지·URL 필터
+- [x] 기본정보/프로그램 독립 저장·취소와 전용 RPC
+- [x] Draft 취소 숨김, 삭제·확정 취소 보호 유지
+- [x] 새 일정 등록 링크 유지, 비밀번호 보기 종료·접근성 보완
+- [x] ESLint / tsc / production build / diff check
+- [x] 원격 읽기 전용 schema·이력·DB lint
+- [x] 메모리 PostgreSQL 32개 migration 및 34개 회귀 검증
+- [x] 원격 신규 migration 적용 및 local/remote 32개 일치·DB lint
+- [ ] 사용자 브라우저 확인 (migration 적용 후)
+- 상세: docs/pr24-operator-ux-review.md

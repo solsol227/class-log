@@ -102,16 +102,16 @@ begin
   );
 
   insert into public.lessons (
-    id, title, starts_at, ends_at, status, created_by
+    id, title, starts_at, ends_at, status, created_by, schedule_category
   ) values
-    (source_one, 'PR19 source one', now() + interval '1 day', now() + interval '2 days', 'scheduled', ctx.operator_id),
-    (source_two, 'PR19 source two', now() + interval '3 days', now() + interval '4 days', 'scheduled', ctx.operator_id),
-    (source_three, 'PR19 source three', now() + interval '5 days', now() + interval '6 days', 'scheduled', ctx.operator_id),
-    (replacement_one, 'PR19 replacement one', now() + interval '7 days', now() + interval '8 days', 'scheduled', ctx.operator_id),
-    (replacement_two, 'PR19 replacement two', now() + interval '9 days', now() + interval '10 days', 'scheduled', ctx.operator_id),
-    (replacement_three, 'PR19 replacement three', now() + interval '11 days', now() + interval '12 days', 'scheduled', ctx.operator_id),
-    (replacement_four, 'PR19 replacement four', now() + interval '13 days', now() + interval '14 days', 'scheduled', ctx.operator_id),
-    (draft_replacement, 'PR19 draft replacement', now() + interval '15 days', now() + interval '16 days', 'draft', ctx.operator_id);
+    (source_one, 'PR19 source one', now() + interval '1 day', now() + interval '2 days', 'scheduled', ctx.operator_id, 'weekend'),
+    (source_two, 'PR19 source two', now() + interval '3 days', now() + interval '4 days', 'scheduled', ctx.operator_id, 'weekend'),
+    (source_three, 'PR19 source three', now() + interval '5 days', now() + interval '6 days', 'scheduled', ctx.operator_id, 'weekend'),
+    (replacement_one, 'PR19 replacement one', now() + interval '7 days', now() + interval '8 days', 'scheduled', ctx.operator_id, 'weekend'),
+    (replacement_two, 'PR19 replacement two', now() + interval '9 days', now() + interval '10 days', 'scheduled', ctx.operator_id, 'weekend'),
+    (replacement_three, 'PR19 replacement three', now() + interval '11 days', now() + interval '12 days', 'scheduled', ctx.operator_id, 'weekend'),
+    (replacement_four, 'PR19 replacement four', now() + interval '13 days', now() + interval '14 days', 'scheduled', ctx.operator_id, 'weekend'),
+    (draft_replacement, 'PR19 draft replacement', now() + interval '15 days', now() + interval '16 days', 'draft', ctx.operator_id, 'weekend');
 
   insert into public.lesson_assignments (
     lesson_id, student_id, student_program_id, assigned_by

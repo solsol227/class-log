@@ -68,13 +68,14 @@
 같은 학생+프로그램의 active enrollment는 동시에 한 건만 허용한다.
 `inactive`는 저장하지 않고 `student_program_statuses` view에서 계산한다.
 
-학생 기본정보와 이용프로그램 변경은 `save_student_profile_and_programs` RPC에서 한 transaction으로 저장한다.
+PR24에서는 `save_student_profile`과 `save_student_programs` RPC로 저장 범위를 분리한다. 전자는 students 기본정보만, 후자는 프로그램 변경 묶음만 갱신한다. 기존 통합 RPC는 Vercel 전환 호환을 위해 이번 migration에서는 유지하되 새 코드 참조는 제거하며, production 배포 확인 뒤 후속 migration에서 제거한다. 두 신규 RPC는 SECURITY INVOKER이며 operator 검증과 기존 RLS를 따른다.
 
 - active 중단: 기존 row를 `stopped`로 바꾸고 중단일·사유를 기록한다.
 - 이용 재개: stopped row를 되살리지 않고 새 active row를 만든다.
 - stopped 사유 수정: 기존 history row의 사유만 수정한다.
 - 미래 활성 일정 배정이 있는 enrollment는 중단할 수 없다.
-- profile 또는 program 변경 하나라도 실패하면 public DB 변경 전체를 rollback한다.
+- 프로그램 변경 묶음 중 하나라도 실패하면 프로그램 변경 전체를 rollback한다. 기본정보와 Auth 이메일 변경·실패 시 복구는 기본정보 action에만 남긴다.
+- 각 편집 form의 저장·취소·미저장 상태를 분리하며 다른 영역 저장의 revalidation으로 편집 중 프로그램 snapshot을 교체하지 않는다.
 
 학생 목록 상태와 이용프로그램 필터는 저장 컬럼을 추가하지 않고 enrollment/view로 계산한다.
 
@@ -88,7 +89,13 @@
 
 ## 3. 일정
 
-lesson은 프로그램 구분이 없는 중립 일정이다. `lessons.program_type`은 제거되었다.
+lesson은 이용권 프로그램 구분이 없는 중립 일정이다. `lessons.program_type`은 제거되었다.
+
+PR24 신규 nullable `lessons.schedule_category`는 `weekday | weekend | trial` 운영 분류만 저장한다. 기존 NULL은 미분류이며 backfill하지 않는다. 신규 INSERT에만 분류 필수를 검사한다. 카테고리는 배정·일반 quota·보강권 계산에 참여하지 않는다.
+
+일정 저장 RPC는 `lesson_category`를 명시적으로 받는다(NULL 포함). 시간·상태·배정 이용권 집합이 현재 row와 같으면 lesson row lock 아래 제목·장소·메모·분류만 수정해 배정과 출결·보강·quota를 그대로 보존한다. 목록은 category/status/month/q query를 조합하고 KST 시작월과 일정 제목을 사용한다.
+
+PR24 migration은 2026-09-07 사용자 승인 후 원격에 적용했다. 기존 일정 12건은 NULL(미분류)로 유지했고 local/remote migration 32개가 일치한다.
 
 `lessons.status`:
 - `draft`
