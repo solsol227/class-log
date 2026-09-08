@@ -342,7 +342,15 @@ PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 
 
 `/student/feedback` 기간 기준은 `lessons.starts_at`의 KST calendar date다. URL은 빠른 기간에 `range=all|1m|3m|6m&sort=asc|desc`, 직접 기간에 `range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD&sort=asc|desc`를 사용한다.
 
-## 15. 후속 구조
+## 15. 운영자 학생별 피드백 조회와 작성
+
+`/operator/students/[studentId]`는 삭제되지 않은 피드백을 수업일 최신순으로 정렬해 최근 4건만 요약하고, `/operator/students/[studentId]/feedback`은 같은 데이터를 KST 수업일 기간·정렬·게시 상태 URL 필터로 제공한다. 공통 조회 dialog는 전체 본문과 댓글을 표시하되 mutation form을 포함하지 않는다.
+
+`/operator/schedules/[lessonId]/students/[studentId]/feedback`은 그룹 일정의 active assignment 하나를 대상으로 하는 독립 작성 화면이다. 모든 피드백·댓글 mutation은 운영자 인증 뒤 lesson, student, active assignment, feedback의 lesson/student 조합을 다시 확인한다. 저장 뒤 일정 상세, 학생별 작성 화면, 학생 상세·전체 피드백, 학생 일정 상세·내 피드백을 함께 revalidate하며 다른 브라우저 탭의 미저장 form state는 갱신하지 않는다.
+
+이 흐름은 기존 `lesson_feedback`, `feedback_comments`, operator RLS와 assignment 복합 FK를 재사용하므로 별도 migration이나 RPC를 추가하지 않는다.
+
+## 16. 후속 구조
 
 - 학생 계정 관리 전용 페이지
 - `rental_reservations`

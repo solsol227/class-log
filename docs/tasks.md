@@ -55,6 +55,8 @@
 - [x] 댓글/답글 thread
 - [x] legacy feedback_responses 제거
 - [x] mutation 0행/오류 성공 오표시 방지
+- [x] 운영자 학생 상세 최근 4건과 학생별 전체 피드백 조회
+- [x] 공통 조회 dialog와 그룹레슨 학생별 새 탭 작성
 
 ### 보강
 - [x] 대기/예정/완료

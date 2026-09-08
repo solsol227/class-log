@@ -4,6 +4,18 @@
 
 목적은 다음 작업자나 다음 Codex 세션이 git log와 긴 대화를 처음부터 뒤지지 않고도 현재 상태를 이해하게 하는 것이다.
 
+## 2026-09-08 — Codex — PR27 학생별 피드백 조회·그룹레슨 작성 UX
+
+- 한 일: 운영자 학생 상세에 최근 피드백 4건, 조회 전용 상세 dialog, KST 기간·정렬·게시 상태를 URL로 유지하는 학생별 전체 피드백 화면을 추가했다.
+- UI 확인 반영: 학생 상세와 전체 목록의 피드백 요약 카드에는 직원 이름만 표시하고 역할은 생략한다. 상세 dialog와 작성 화면의 직원 선택에는 역할을 유지한다.
+- 한 일: 일정의 active 학생마다 새 탭 피드백 작성 링크를 제공하고, 학생·일정 조합별 작성/수정/삭제/댓글 화면과 저장 시각 안내를 추가했다.
+- 확인된 것: 기존 다중 `lesson_feedback`, `feedback_comments`, operator RLS, assignment 복합 FK로 구현 가능해 migration/RPC를 추가하지 않았다. 모든 operator 피드백 mutation은 active assignment와 feedback의 lesson/student 조합을 서버에서 재검증하고 관련 operator/student 6개 경로를 revalidate한다.
+- 병렬 작업: PR26 작업 폴더와 `20260908000000_pr26_makeup_manual_completion.sql`은 변경하지 않았고, `origin/main`의 PR25 merge commit `9b22a18`에서 별도 `feat/operator-student-feedback` worktree를 만들었다.
+- 동기화: PR26 병합 뒤 `origin/main`의 merge commit `6670b54`로 fast-forward하고 PR27 변경을 다시 적용했다. 기능 코드 충돌은 없었고 공통 문서 3개도 자동 병합 뒤 의미와 충돌 표식을 확인했다.
+- 검증: PR26 동기화 후 TypeScript, ESLint, Supabase 공개 환경변수를 포함한 production build와 `git diff --check`를 통과했다. 두 신규 동적 route의 build 출력을 확인했고 별도 production 서버에서 비인증 접근이 운영자 로그인으로 307 redirect되는 것을 확인했다.
+- 사용자 확인: production 브라우저에서 실제 피드백 데이터 조회·저장, dialog와 모바일 동작을 확인했고, 확인 결과를 반영해 피드백 요약 카드의 직원 역할 표시를 제거했다. 기존 연결 정보의 DB 비밀번호 인증 실패로 최신 원격 migration 목록과 read-only RLS 실계정 회귀는 별도로 재확인하지 못했다.
+- 제한: 같은 feedback을 여러 탭에서 동시에 수정하면 마지막 저장이 앞선 저장을 덮어쓸 수 있는 기존 last-write-wins 동작을 유지한다. 동시 편집 잠금은 이번 범위에 추가하지 않았다.
+
 ## 형식
 
 ```md

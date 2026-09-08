@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { saveRosterAttendance, type AttendanceStatus, type RosterAttendanceActionState } from "../actions";
@@ -45,7 +46,10 @@ export function RosterAttendanceForm({ lessonId, students, blockedReason }: { le
             <fieldset key={student.id} disabled={Boolean(blockedReason)} className="grid gap-3 rounded-xl border border-[var(--line)] p-4 sm:grid-cols-[minmax(9rem,1fr)_minmax(0,2fr)] sm:items-center">
               <legend className="sr-only">{student.name} 출결 상태</legend>
               <div>
-                <p className="font-bold">{student.name}</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-bold">{student.name}</p>
+                  <Link href={`/operator/schedules/${lessonId}/students/${student.id}/feedback`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center rounded-lg border border-[var(--accent)] px-3 text-sm font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">피드백 작성 <span aria-hidden="true" className="ml-1">↗</span></Link>
+                </div>
                 <p className="mt-1 text-sm text-[var(--muted)]">{student.status ? "기록됨" : "미기록"}</p>
                 {makeupNotice ? <p className="mt-2 text-xs font-semibold text-amber-800">{makeupNotice}</p> : null}
               </div>
