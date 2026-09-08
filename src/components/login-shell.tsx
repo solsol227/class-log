@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { DemoNotice } from "@/components/demo-notice";
 
 type LoginShellProps = {
   audience: "운영자" | "학생";
@@ -42,7 +41,6 @@ export function LoginShell({
           </section>
         </div>
       </main>
-      <DemoNotice />
     </div>
   );
 }
