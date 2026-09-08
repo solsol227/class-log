@@ -126,7 +126,15 @@ DB, RLS, migration, Postgres function 작업이라면 추가로 `docs/compound/s
 
 - 브라우저 자동화가 즉시 동작하면 사용할 수 있다.
 - 브라우저 플러그인, trust path, 연결 환경 문제 해결에 시간을 소비하지 않는다.
-- 환경 문제로 자동화가 막히면 production 서버와 사용자 테스트 URL을 제공하고 사용자가 직접 확인하도록 한다.
+- 공개 화면(`/`, `/login/operator`, `/login/student`)은 Supabase 연결 없이 레이아웃을 확인할 수 있다.
+- 보호 화면(`/operator/*`, `/student/*`)은 단순 UI가 아니라 Supabase Auth, role claims, RLS, 원격 DB 조회에 의존한다.
+- 보호 화면을 확인해야 하는 작업에서는 가능한 한 작업 초반에 Supabase 접속 가능한 로컬 dev/prod 서버를 띄우고, 그 서버를 유지한 채 중간 브라우저 확인을 진행한다.
+- Supabase 연결이 필요한 브라우저 검증에서 Auth/DB 네트워크 오류가 나면 과거 성공 기록이나 UI 추측으로 대체하지 않는다. 검증 불가로 보고한다.
+- mock/dev preview는 순수 레이아웃, 빈 상태, 에러 상태, 특수 상태 확인용 보조 수단으로만 사용한다.
+- mock/dev preview 결과를 로그인, 권한, RLS, 저장, DB mutation, 실제 일정관리 동작 검증으로 간주하지 않는다.
+- 환경 문제로 브라우저 자동화가 막히면 production 서버와 사용자 테스트 URL을 제공하고 사용자가 직접 확인하도록 한다.
+- 최종 검증에서 로그인/권한/보호 화면 흐름이 관련되면 실제 operator/student 계정 흐름 또는 `node scripts/verify-local-login.mjs` 같은 로컬 로그인 검증을 사용한다.
+- 사용자 데이터나 실제 DB 데이터를 변경하는 검증은 명시적 허용 없이 수행하지 않는다.
 
 ### 작업 중 새 문제 발견
 
