@@ -91,3 +91,35 @@ export async function updateMakeupReason(makeupId: string, formData: FormData) {
   revalidateMakeupPaths();
   redirect("/operator/makeup?reasonUpdated=1");
 }
+
+export async function completeMakeupWithoutSchedule(makeupId: string, formData: FormData) {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  if (!UUID_PATTERN.test(makeupId)) redirect("/operator/makeup?error=invalid");
+  const note = String(formData.get("completion_note") ?? "");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("complete_makeup_without_schedule", {
+    target_makeup_id: makeupId,
+    completion_reason: note,
+  });
+  if (error || data !== makeupId) {
+    if (error) console.error(error);
+    redirect(`/operator/makeup?error=${error?.code === "P0002" ? "state" : "manual_complete"}`);
+  }
+  revalidateMakeupPaths();
+  redirect("/operator/makeup?manualCompleted=1");
+}
+
+export async function restoreManualMakeupCompletion(makeupId: string) {
+  await requireAuthenticatedUser("/login/operator", "operator");
+  if (!UUID_PATTERN.test(makeupId)) redirect("/operator/makeup?error=invalid");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("restore_manual_makeup_completion", {
+    target_makeup_id: makeupId,
+  });
+  if (error || data !== makeupId) {
+    if (error) console.error(error);
+    redirect(`/operator/makeup?error=${error?.code === "P0002" ? "restore_state" : "restore"}`);
+  }
+  revalidateMakeupPaths();
+  redirect("/operator/makeup?restored=1");
+}

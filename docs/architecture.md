@@ -258,20 +258,26 @@ Draft에서도:
 - 원 출결 excused → present/absent: requested/scheduled entitlement를 자동 cancelled
 - 원 출결 present/absent → excused: 같은 cancelled row를 requested로 자동 재개하거나 row가 없으면 생성
 - 대체 일정 출결 present/absent/excused 저장: replacement 출결을 직접 연결하고 scheduled → completed
+- `complete_makeup_without_schedule`: 대체 일정 없이 requested → completed
+- `restore_manual_makeup_completion`: 대체 일정 없이 수동 완료된 completed → requested
 
-completed는 terminal/read-only다. 보강 일정 출결이 present/absent/excused이면 별도 완료 버튼 없이 기존 보강이 completed가 된다. excused이면 그 replacement 출결에서 새 requested entitlement가 자동 생성된다.
+completed는 화면에서 하나의 `완료` 의미로만 표시한다. 대체 일정 출결로 자동 완료된 보강과 운영자가 대체 일정 없이 수동 완료한 보강을 별도 완료 탭이나 상태로 분리하지 않는다. 필요할 때 완료 카드에만 `대체 일정 완료` 또는 `일정 없이 완료`를 짧게 표시한다.
+
+대체 일정 출결 완료는 terminal/read-only다. 보강 일정 출결이 present/absent/excused이면 별도 완료 버튼 없이 기존 보강이 completed가 된다. excused이면 그 replacement 출결에서 새 requested entitlement가 자동 생성된다. 이 경우 replacement attendance, assignment, feedback 등 실제 기록을 삭제하거나 되돌리지 않으므로 단순 복구를 제공하지 않는다.
+
+대체 일정 없이 수동 완료한 보강은 replacement lesson/attendance/assignment를 만들지 않고, 일반 이용권 차감·반환도 하지 않는다. 처리자, 처리 시각, 선택적 메모를 기록하며 source attendance와 보강 권리는 유지한다. 이 완료 건은 같은 `makeup_lessons` row를 `requested`로 되돌리는 `보강 대기로 복구`가 가능하다. 복구 시 현재 완료 필드는 비우되 완료·복구 당시의 완료 경로, 처리자, 시각, 메모는 각각의 `makeup_lesson_events` row에 append-only로 보존한다. 완료 경로 구분은 화면 분류가 아니라 데이터 무결성과 복구 가능 여부 판정에만 사용한다.
 
 원 사유결석을 non-excused로 바꾸면 requested/scheduled 보강은 자동 cancelled가 된다. completed 보강의 원 출결은 변경할 수 없다. cancelled source를 다시 excused로 저장하면 신규 row 없이 같은 ID가 requested로 재개된다.
 
 대체 일정 변경 시 기존 provenance가 existing이면 이전 assignment를 보존한다. created/reactivated이면 출결·피드백·다른 활성 보강 사용이 없는 경우 자동 soft-unassign하고 새 assignment를 생성·복구한다. 보존 기록이 있으면 전체 transaction을 중단한다. 일반 일정 수정 경로가 scheduled 보강의 replacement assignment를 직접 해제하는 것도 DB trigger로 차단한다.
 
-`makeup_lesson_events`는 생성·매칭·변경·완료·자동 취소·자동 재개를 append-only로 기록하며 `event_cause`로 운영자 처리, 원 출결 변경, 대체 출결을 구분한다. 운영자만 조회할 수 있다.
+`makeup_lesson_events`는 생성·매칭·변경·완료·자동 취소·자동 재개를 append-only로 기록하며 `event_cause`로 운영자 처리, 원 출결 변경, 대체 출결을 구분한다. 완료·복구 이벤트에는 당시의 `completion_method`, 처리자, 시각, 선택 메모를 함께 보존한다. 운영자만 조회할 수 있다.
 
 보강 배정·변경 뒤 보강관리, 일정 목록/상세, 학생 일정 cache를 함께 revalidate한다.
 
 ### 운영 수정
 
-`update_makeup_reason`은 requested/scheduled 상태에서만 사유를 수정한다. 운영자 기본 UX에는 일정 배정/변경만 노출한다. 임의 보강 생성, 수동 취소·재개·완료, 매칭 해제, requested hard delete는 제거한다. 보강 및 연결된 출결의 물리 삭제는 DB trigger/FK와 권한으로 차단한다. scheduled 보강이 연결된 대체 일정은 취소·삭제할 수 없고 먼저 보강관리에서 다른 일정으로 변경해야 한다.
+`update_makeup_reason`은 requested/scheduled 상태에서만 사유를 수정한다. 운영자 기본 UX에는 일정 배정/변경과 대체 일정 없는 수동 완료만 노출한다. 임의 보강 생성, 수동 취소·재개, 매칭 해제, requested hard delete는 제거한다. 보강 및 연결된 출결의 물리 삭제는 DB trigger/FK와 권한으로 차단한다. scheduled 보강이 연결된 대체 일정은 취소·삭제할 수 없고 먼저 보강관리에서 다른 일정으로 변경해야 한다.
 
 ## 10. 출결
 
