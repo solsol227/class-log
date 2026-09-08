@@ -93,7 +93,7 @@ lesson은 이용권 프로그램 구분이 없는 중립 일정이다. `lessons.
 
 PR24 신규 nullable `lessons.schedule_category`는 `weekday | weekend | trial` 운영 분류만 저장한다. 기존 NULL은 미분류이며 backfill하지 않는다. 신규 INSERT에만 분류 필수를 검사한다. 카테고리는 배정·일반 quota·보강권 계산에 참여하지 않는다.
 
-일정 저장 RPC는 `lesson_category`를 명시적으로 받는다(NULL 포함). 시간·상태·배정 이용권 집합이 현재 row와 같으면 lesson row lock 아래 제목·장소·메모·분류만 수정해 배정과 출결·보강·quota를 그대로 보존한다. 목록은 category/status/month/q query를 조합하고 KST 시작월과 일정 제목을 사용한다.
+일정 저장 RPC는 `lesson_category`를 명시적으로 받는다(NULL 포함). 시간·상태·배정 이용권 집합이 현재 row와 같으면 lesson row lock 아래 제목·장소·메모·분류만 수정해 배정과 출결·보강·quota를 그대로 보존한다. 목록은 category/status/month/staff/sort query를 조합하며, 담당자 필터는 active 직원과 `lesson_staff` 관계를 기준으로 적용한다.
 
 PR24 migration은 2026-09-07 사용자 승인 후 원격에 적용했다. 기존 일정 12건은 NULL(미분류)로 유지했고 local/remote migration 32개가 일치한다.
 

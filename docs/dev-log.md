@@ -32,6 +32,12 @@
 
 <!-- 아래부터 최신 항목을 위에 추가 -->
 
+## 2026-09-09 — Codex — PR28 일정관리 목록 정보·필터 개선
+
+- 한 일: 최신 `origin/main` 기준 `feat/schedule-list-polish` 브랜치에서 홈 첫 화면과 운영자·학생 로그인 화면의 DEMO 안내 박스를 제거했다. 운영자 일정 카드에 기존 `lesson_staff` 담당자 이름과 활성 `lesson_assignments` 학생 이름을 표시하고, 학생이 4명 이상이면 앞 3명과 `외 N명`으로 요약한다. 카테고리·상태 버튼은 줄바꿈 가능한 한 줄 흐름으로 바꾸고 월/담당자/정렬 컨트롤을 같은 3열 계열로 정리했다.
+- 확인된 것: 담당자 선택지는 active `staff_profiles`만 사용하고 `staff` URL query로 새로고침 상태를 유지한다. 카드 담당자 표시는 보관 직원과 연결된 과거 관계도 유지하며, 학생은 `unassigned_at is null`인 배정만 포함한다. migration, RLS, Supabase 데이터와 Auth 사용자는 변경하지 않았다.
+- 검증: 작업 tree 대상 전체 ESLint(`.worktrees/**` 제외), `tsc --noEmit --incremental false`, production build, `git diff --check`를 통과했다. 실제 Supabase 연결 production 서버에서 operator/student 로그인과 보호 화면 HTTP 200, 비인증 역할 요청 401을 확인했고, 사용자가 운영자 일정 카드·필터·모바일 레이아웃과 DEMO 문구 제거를 브라우저에서 확인했다. 원형 `npm run lint`는 저장소 내부 기존 `.worktrees/**/.next` 산출물을 검사하는 알려진 문제로 실패했다.
+
 ## 2026-09-08 — Codex — PR26 보강 완료 정책 정정
 
 - 한 일: 대체 일정 출결 완료와 일정 없이 수동 완료를 모두 기존 `completed` 상태와 완료 목록에 함께 표시하도록 구현했다. append-only migration으로 `makeup_lessons.completion_method`, 수동 완료 처리자/시각/메모 컬럼, `complete_makeup_without_schedule`, `restore_manual_makeup_completion` RPC를 추가했다. 완료·복구 시점의 완료 경로와 메모는 별도의 `makeup_lesson_events` row에도 저장한다.

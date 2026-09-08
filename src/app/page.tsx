@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DemoNotice } from "@/components/demo-notice";
 import { SiteHeader } from "@/components/site-header";
 
 export default function Home() {
@@ -63,7 +62,6 @@ export default function Home() {
           </dl>
         </section>
       </main>
-      <DemoNotice />
     </div>
   );
 }
