@@ -207,5 +207,6 @@
 - [x] 대상 ESLint / TypeScript / production build / diff check
 - [x] PGlite에서 33개 migration 및 PR26 포함 50개 회귀 검증
 - [x] 원격 32개 migration 일치·PR26 dry-run·현재 schema DB lint
-- [ ] 연결 환경 확인 후 원격 migration 적용
+- [x] 로컬 Supabase ref 일치·원격 DB branch 없음 확인 (primary DB로 취급)
+- [ ] PR 병합 후 primary Supabase migration 적용
 - [ ] operator/student RLS 회귀 검증
