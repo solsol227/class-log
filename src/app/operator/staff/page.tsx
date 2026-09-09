@@ -1,8 +1,9 @@
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createStaff, deleteStaff, restoreStaff, updateStaff } from "./actions";
+import { deleteStaff, restoreStaff, updateStaff } from "./actions";
+import { StaffCreateForm } from "./staff-create-form";
 
 const ROLE_LABELS: Record<string, string> = {
   manager: "매니저",
@@ -34,7 +35,7 @@ function errorMessage(code?: string) {
 }
 
 export default async function StaffPage({ searchParams }: { searchParams: Promise<StaffNoticeParams> }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const notices = await searchParams;
   const supabase = await createSupabaseServerClient();
   const { data: staff, error } = await supabase
@@ -54,14 +55,7 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
       {failure ? <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-4 font-bold text-rose-900">{failure}</p> : null}
       {success ? <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-4 font-bold text-emerald-900">{success}</p> : null}
 
-      <form action={createStaff} className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-white p-5 sm:grid-cols-[1fr_1fr_auto]">
-        <input name="display_name" required placeholder="직원 이름" className="h-12 rounded-xl border border-[#9badaa] px-4" />
-        <select name="role" required className="h-12 rounded-xl border border-[#9badaa] bg-white px-4">
-          <option value="manager">매니저</option>
-          <option value="vocal_trainer">보컬트레이너</option>
-        </select>
-        <button className="rounded-xl bg-[var(--accent)] px-5 font-bold text-white">직원 등록</button>
-      </form>
+      {access.canManageStaff ? <StaffCreateForm /> : <p className="mt-5 rounded-xl bg-[#f4f8f7] p-4 text-sm text-[var(--muted)]">직원 기본정보를 조회할 수 있습니다. 등록·수정·삭제와 로그인 계정 관리는 owner만 가능합니다.</p>}
 
       {activeStaff.length ? (
         <ul className="mt-6 space-y-3">
@@ -71,7 +65,7 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
                 <span>{member.display_name}</span>
                 <span>상세 보기 →</span>
               </Link>
-              <form id={`staff-update-${member.id}`} action={updateStaff.bind(null, member.id)} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)] sm:items-center">
+              {access.canManageStaff ? <><form id={`staff-update-${member.id}`} action={updateStaff.bind(null, member.id)} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,0.7fr)] sm:items-center">
                   <input name="display_name" defaultValue={member.display_name} required className="h-11 rounded-xl border border-[#9badaa] px-3" />
                   <select name="role" defaultValue={member.role} required className="h-11 rounded-xl border border-[#9badaa] bg-white px-3">
                     <option value="manager">매니저</option>
@@ -85,7 +79,7 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
                     삭제
                   </ConfirmSubmitButton>
                 </form>
-              </div>
+              </div></> : <p className="text-sm text-[var(--muted)]">{ROLE_LABELS[member.role] ?? member.role}</p>}
             </li>
           ))}
         </ul>
@@ -103,9 +97,9 @@ export default async function StaffPage({ searchParams }: { searchParams: Promis
                   <Link href={`/operator/staff/${member.id}`} className="font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">{member.display_name}</Link>
                   <p className="text-sm text-[var(--muted)]">{ROLE_LABELS[member.role] ?? member.role}</p>
                 </div>
-                <form action={restoreStaff.bind(null, member.id)}>
+                {access.canManageStaff ? <form action={restoreStaff.bind(null, member.id)}>
                   <button className="h-10 rounded-xl border border-[var(--accent)] px-4 font-bold">복원</button>
-                </form>
+                </form> : null}
               </li>
             ))}
           </ul>

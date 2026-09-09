@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const STATUS_FILTERS = [
@@ -120,7 +120,7 @@ export default async function OperatorStudentsPage({
 }: {
   searchParams: Promise<{ deleted?: string; status?: string; program?: string; q?: string }>;
 }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const { deleted, status, program, q } = await searchParams;
   const selectedStatus: StatusFilter = STATUS_FILTERS.some((filter) => filter.value === status) ? status as StatusFilter : "all";
   const selectedProgram: ProgramFilter = PROGRAM_OPTIONS.some((option) => option.value === program) ? program as ProgramFilter : "all";
@@ -162,7 +162,7 @@ export default async function OperatorStudentsPage({
           <p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">클래스로그</p>
           <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">학생 목록</h1>
         </div>
-        <Link href="/operator/students/new" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)]">학생 등록</Link>
+        {access.canManageStudents ? <Link href="/operator/students/new" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)]">학생 등록</Link> : null}
       </header>
 
       {deleted === "1" ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">학생과 로그인 계정을 삭제했습니다.</p> : null}

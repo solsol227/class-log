@@ -13,6 +13,10 @@ import {
   InvalidStudentNicknameError,
   studentNicknameToAuthEmail,
 } from "@/lib/auth/student-identity";
+import {
+  InvalidStaffLoginIdError,
+  staffLoginIdToAuthEmail,
+} from "@/lib/auth/operator-identity";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type LoginMode = "operator" | "student";
@@ -33,12 +37,12 @@ type RoleCheckResponse = {
 
 const loginConfig = {
   operator: {
-    identifierLabel: "이메일",
-    identifierName: "email",
-    identifierType: "email",
-    identifierPlaceholder: "이메일을 입력하세요",
-    identifierRequiredMessage: "이메일을 입력해 주세요.",
-    autoComplete: "email",
+    identifierLabel: "아이디 또는 이메일",
+    identifierName: "identifier",
+    identifierType: "text",
+    identifierPlaceholder: "아이디 또는 이메일을 입력하세요",
+    identifierRequiredMessage: "아이디 또는 이메일을 입력해 주세요.",
+    autoComplete: "username",
     buttonLabel: "운영자로 로그인",
   },
   student: {
@@ -124,10 +128,11 @@ export function PasswordLoginForm({
     setIsSubmitting(true);
 
     try {
-      const email =
-        mode === "student"
-          ? studentNicknameToAuthEmail(identifier)
-          : identifier;
+      const email = mode === "student"
+        ? studentNicknameToAuthEmail(identifier)
+        : identifier.includes("@")
+          ? identifier
+          : staffLoginIdToAuthEmail(identifier);
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -161,7 +166,10 @@ export function PasswordLoginForm({
       router.replace(roleResult.destination);
       router.refresh();
     } catch (error) {
-      if (error instanceof InvalidStudentNicknameError) {
+      if (
+        error instanceof InvalidStudentNicknameError
+        || error instanceof InvalidStaffLoginIdError
+      ) {
         setFieldErrors({ identifier: error.message });
       } else {
         showFormError(classifyUnexpectedLoginError(error));

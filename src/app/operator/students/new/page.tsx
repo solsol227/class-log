@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { StudentCreateForm } from "./student-create-form";
 
 export default async function OperatorStudentCreatePage() {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8 sm:py-14">

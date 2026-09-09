@@ -2,7 +2,7 @@ import Link from "next/link";
 import { InstantListControls } from "./instant-list-controls";
 import { ScheduleCategoryBadge } from "@/components/schedule-category-badge";
 import { SCHEDULE_CATEGORIES, SCHEDULE_CATEGORY_LABELS, isScheduleCategory } from "@/lib/lessons/category";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { getLessonDisplayStatus, getLessonDisplayStatusLabel, type LessonDisplayStatus } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -58,7 +58,7 @@ function assignedStudentLabel(names: string[]) {
 }
 
 export default async function SchedulesPage({ searchParams }: { searchParams: Promise<ScheduleSearchParams> }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const resolvedSearchParams = await searchParams;
   const deleted = typeof resolvedSearchParams.deleted === "string" ? resolvedSearchParams.deleted : undefined;
   const activeStatuses = [...new Set(getQueryValues(resolvedSearchParams.status).filter(
@@ -98,7 +98,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
   if (error || relatedDataError || !lessons || !assignments || !students || !lessonStaff || !staffProfiles) {
     throw new Error("일정 목록을 불러오지 못했습니다.", { cause: error ?? relatedDataError });
   }
-  await syncElapsedLessonStatuses(supabase, lessons.map((lesson) => lesson.id));
+  if (access.isOwner) await syncElapsedLessonStatuses(supabase, lessons.map((lesson) => lesson.id));
 
   const activeStaffOptions = staffProfiles
     .filter((member) => member.is_active)
@@ -173,7 +173,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
       {deleted === "1" ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">일정을 삭제했습니다.</p> : null}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-[-0.04em] sm:text-4xl">일정관리</h1>
-        <Link href="/operator/schedules/new" className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]">새 일정 등록</Link>
+        {access.canManageSchedules ? <Link href="/operator/schedules/new" className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]">새 일정 등록</Link> : null}
       </header>
       <section className="mt-6 space-y-5">
         <div>
@@ -239,7 +239,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
       />
       {hasActiveFilters ? <Link href="/operator/schedules" className="mt-3 inline-flex min-h-12 items-center rounded-xl border border-[var(--line)] bg-white px-4 font-bold text-[var(--accent-strong)]">필터 초기화</Link> : null}
       {lessons.length === 0 ? (
-        <section className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8"><p className="font-bold">등록된 일정이 없습니다.</p><Link href="/operator/schedules/new" className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white">새 일정 등록</Link></section>
+        <section className="mt-8 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8"><p className="font-bold">등록된 일정이 없습니다.</p>{access.canManageSchedules ? <Link href="/operator/schedules/new" className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white">새 일정 등록</Link> : null}</section>
       ) : filteredLessons.length === 0 ? (
         <section className="mt-8 rounded-2xl border border-dashed border-[var(--line)] bg-white p-6 sm:p-8">
           <p className="font-bold">조건에 맞는 일정이 없습니다.</p>

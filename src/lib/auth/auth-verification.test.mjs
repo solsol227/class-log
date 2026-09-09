@@ -23,11 +23,14 @@ function load(file, dependencies = {}) {
 const errors = load("./errors.ts");
 const roles = load("./roles.ts");
 
-function harness(result) {
+function harness(result, operatorResult = { data: { accessLevel: "owner", staffProfileId: null }, error: null }) {
   let signOuts = 0;
   const client = { auth: {
     getClaims: async () => result,
     signOut: async () => { signOuts++; },
+  }, rpc: async (name) => {
+    assert.equal(name, "get_my_operator_context");
+    return operatorResult;
   } };
   const dependencies = {
     "@/lib/auth/errors": errors,
@@ -83,4 +86,24 @@ test("Verified role is accepted; wrong role is still denied", async () => {
     });
     assert.equal((await h.route(request)).status, status);
   }
+});
+
+test("Disabled operator account is signed out and denied by route and proxy", async () => {
+  const result = { data: { claims: { app_metadata: { role: "operator" } } }, error: null };
+  const h = harness(result, { data: null, error: null });
+  const routeResponse = await h.route(new Request("http://localhost/api/auth/role", {
+    method: "POST", body: JSON.stringify({ expectedRole: "operator" }),
+  }));
+  assert.equal(routeResponse.status, 403);
+  const proxyResponse = await h.proxy(new NextRequest("http://localhost/operator/schedules", { headers: { cookie: "sb-test-auth-token=disabled" } }));
+  assert.match(proxyResponse.headers.get("location"), /notice=account-disabled/);
+  assert.equal(h.signOuts(), 2);
+});
+
+test("Operator account lookup failure preserves the session and reports outage", async () => {
+  const result = { data: { claims: { app_metadata: { role: "operator" } } }, error: null };
+  const h = harness(result, { data: null, error: { code: "PGRST000" } });
+  const response = await h.proxy(new NextRequest("http://localhost/operator/schedules", { headers: { cookie: "sb-test-auth-token=preserved" } }));
+  assert.match(response.headers.get("location"), /notice=auth-unavailable/);
+  assert.equal(h.signOuts(), 0);
 });

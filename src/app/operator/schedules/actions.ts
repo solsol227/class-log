@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { isScheduleCategory } from "@/lib/lessons/category";
@@ -118,7 +118,7 @@ export async function createSchedule(
   _previousState: ScheduleActionState,
   formData: FormData,
 ): Promise<ScheduleActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const parsed = readScheduleForm(formData, true);
   if (Object.keys(parsed.fieldErrors).length > 0) {
     return { fieldErrors: parsed.fieldErrors, values: parsed.values };
@@ -146,7 +146,7 @@ export async function updateSchedule(
   _previousState: ScheduleActionState,
   formData: FormData,
 ): Promise<ScheduleActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const parsed = readScheduleForm(formData);
 
   if (!UUID_PATTERN.test(lessonId)) return { fieldErrors: {}, formError: "일정을 찾을 수 없습니다." };
@@ -198,7 +198,7 @@ export async function saveRosterAttendance(
   _previousState: RosterAttendanceActionState,
   formData: FormData,
 ): Promise<RosterAttendanceActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
 
   const selected = new Map<string, AttendanceStatus>();
@@ -217,6 +217,17 @@ export async function saveRosterAttendance(
 
   const studentIds = [...selected.keys()];
   const supabase = await createSupabaseServerClient();
+  if (!access.isOwner) {
+    const { data: staffAssignment, error: staffAssignmentError } = await supabase
+      .from("lesson_staff")
+      .select("lesson_id")
+      .eq("lesson_id", lessonId)
+      .eq("staff_id", access.staffProfileId!)
+      .maybeSingle();
+    if (staffAssignmentError || !staffAssignment) {
+      return { formError: "본인이 담당자로 배정된 일정에서만 출결을 저장할 수 있습니다." };
+    }
+  }
   const [{ data: lesson, error: lessonError }, { data: assignments, error: assignmentError }] = await Promise.all([
     supabase.from("lessons").select("id, starts_at, status").eq("id", lessonId).maybeSingle(),
     supabase.from("lesson_assignments").select("student_id").eq("lesson_id", lessonId).in("student_id", studentIds).is("unassigned_at", null),
@@ -270,7 +281,7 @@ export async function deleteSchedule(
   _previousState: ManagementActionState,
 ): Promise<ManagementActionState> {
   void _previousState;
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
 
   const supabase = await createSupabaseServerClient();
@@ -306,7 +317,7 @@ export async function deleteSchedule(
 
 export async function confirmDraftSchedule(lessonId: string, _previousState: ManagementActionState): Promise<ManagementActionState> {
   void _previousState;
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("confirm_draft_lesson", { target_lesson_id: lessonId });
@@ -318,7 +329,7 @@ export async function confirmDraftSchedule(lessonId: string, _previousState: Man
 
 export async function cancelSchedule(lessonId: string, _previousState: ManagementActionState): Promise<ManagementActionState> {
   void _previousState;
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("cancel_lesson", { target_lesson_id: lessonId });
@@ -330,7 +341,7 @@ export async function cancelSchedule(lessonId: string, _previousState: Managemen
 }
 
 export async function updateLessonStaff(lessonId: string, formData: FormData) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const staffIds = [...new Set(formData.getAll("staff_ids").map(String))];
   if (!UUID_PATTERN.test(lessonId) || staffIds.some((id) => !UUID_PATTERN.test(id))) redirect(`/operator/schedules/${lessonId}?staffError=1`);
   const supabase = await createSupabaseServerClient();

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   completeMakeupWithoutSchedule,
@@ -95,7 +95,7 @@ function formatDateTime(value: string) {
 }
 
 export default async function MakeupPage({ searchParams }: { searchParams: Promise<MakeupNotices> }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const notices = await searchParams;
   const supabase = await createSupabaseServerClient();
   const [makeupsResult, studentsResult, lessonsResult, eventsResult, programsResult] = await Promise.all([
@@ -203,13 +203,13 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                     근거 출결: {sourceStatus ? ATTENDANCE_LABELS[sourceStatus] ?? sourceStatus : "확인 불가"}
                   </p>
                   <p className="mt-1 text-sm font-bold text-[var(--accent-strong)]">보강 이용권: {PROGRAM_LABELS[programById.get(item.source_student_program_id) ?? ""] ?? "확인 불가"}</p>
-                  {(status === "requested" || status === "scheduled") ? (
+                  {access.canManageMakeup && (status === "requested" || status === "scheduled") ? (
                     <MakeupReasonEditor makeupId={item.id} reason={item.reason} />
                   ) : (
                     <p className="mt-3 whitespace-pre-wrap text-sm text-[var(--muted)]">{item.reason || "사유 없음"}</p>
                   )}
 
-                  {status === "requested" ? (
+                  {status === "requested" && access.canManageMakeup ? (
                     <>
                       {options.length ? (
                         <form action={scheduleMakeup.bind(null, item.id)} className="mt-4 space-y-2">
@@ -246,7 +246,7 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                         <p className="mt-1 text-[var(--muted)]">출결: {replacementStatus ? ATTENDANCE_LABELS[replacementStatus] ?? replacementStatus : "아직 기록되지 않음"}</p>
                         <p className="mt-2 text-xs text-[var(--muted)]">대체 일정에서 출결을 저장하면 보강이 자동으로 완료됩니다.</p>
                       </div>
-                      {changeOptions.length ? (
+                      {access.canManageMakeup && changeOptions.length ? (
                         <form action={rescheduleMakeup.bind(null, item.id, item.replacement_lesson_id)} className="space-y-2 border-t border-[var(--line)] pt-4">
                           <label className="block text-sm font-bold" htmlFor={`reschedule-${item.id}`}>대체 일정 변경</label>
                           <select id={`reschedule-${item.id}`} name="replacement_lesson_id" required className="h-10 w-full rounded-lg border px-2">
@@ -268,9 +268,9 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                         <>
                           {item.completed_at ? <p className="mt-1 text-[var(--muted)]">처리: {formatDateTime(item.completed_at)}</p> : null}
                           {item.completion_note ? <p className="mt-2 whitespace-pre-wrap">{item.completion_note}</p> : null}
-                          <form action={restoreManualMakeupCompletion.bind(null, item.id)} className="mt-3">
+                          {access.canManageMakeup ? <form action={restoreManualMakeupCompletion.bind(null, item.id)} className="mt-3">
                             <button className="h-10 w-full rounded-lg border border-emerald-700 bg-white font-bold text-emerald-950">보강 대기로 복구</button>
-                          </form>
+                          </form> : null}
                         </>
                       ) : (
                         <>

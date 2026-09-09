@@ -129,11 +129,17 @@ DB, RLS, migration, Postgres function 작업이라면 추가로 `docs/compound/s
 - 공개 화면(`/`, `/login/operator`, `/login/student`)은 Supabase 연결 없이 레이아웃을 확인할 수 있다.
 - 보호 화면(`/operator/*`, `/student/*`)은 단순 UI가 아니라 Supabase Auth, role claims, RLS, 원격 DB 조회에 의존한다.
 - 보호 화면을 확인해야 하는 작업에서는 가능한 한 작업 초반에 Supabase 접속 가능한 로컬 dev/prod 서버를 띄우고, 그 서버를 유지한 채 중간 브라우저 확인을 진행한다.
+- 별도 git worktree에는 Git에서 제외된 `.env.local`이 자동으로 따라오지 않는다. worktree에서 로그인·보호 화면을 검증할 때는 원본 checkout의 값을 출력하거나 복사·커밋하지 말고, 필요한 환경변수를 검증 프로세스에 안전하게 전달한다.
+- `NEXT_PUBLIC_*` 환경변수는 production 브라우저 번들에 **build 시점**에 포함된다. `next start`를 실행할 때만 환경변수를 전달해서는 안 되며, 같은 환경변수를 전달한 상태에서 `next build`부터 다시 실행해야 한다.
+- production 서버도 Supabase로 나가는 네트워크가 허용된 환경에서 실행한다. 브라우저 로그인만 성공하고 역할 API나 보호 화면이 실패하면, 브라우저가 아니라 Next 서버의 외부 네트워크 제한 여부도 확인한다.
+- 사용자에게 브라우저 검증을 넘기기 전에 합성된 존재하지 않는 계정으로 로그인을 한 번 시도한다. `입력한 계정 정보가 올바르지 않습니다`가 나오면 브라우저에서 Supabase Auth까지 연결된 것이고, 환경변수 누락으로 인한 `일시적인 오류`와 구분할 수 있다. 실제 사용자 비밀번호를 대신 입력하거나 출력하지 않는다.
+- 가능하면 같은 서버에 `node scripts/verify-local-login.mjs`를 실행해 실제 테스트 operator/student 로그인, 역할 API, 보호 화면 HTTP 응답까지 함께 확인한다.
+- 로그인 폼에서 즉시 `일시적인 오류`가 나오고 Supabase 네트워크 요청도 없다면 migration보다 먼저 브라우저 번들에 공개 Supabase 환경변수가 포함됐는지 확인한다. Node 검증은 성공하지만 브라우저만 실패하는 경우에도 build 시점 환경변수 누락을 우선 의심한다.
 - Supabase 연결이 필요한 브라우저 검증에서 Auth/DB 네트워크 오류가 나면 과거 성공 기록이나 UI 추측으로 대체하지 않는다. 검증 불가로 보고한다.
 - mock/dev preview는 순수 레이아웃, 빈 상태, 에러 상태, 특수 상태 확인용 보조 수단으로만 사용한다.
 - mock/dev preview 결과를 로그인, 권한, RLS, 저장, DB mutation, 실제 일정관리 동작 검증으로 간주하지 않는다.
 - 환경 문제로 브라우저 자동화가 막히면 production 서버와 사용자 테스트 URL을 제공하고 사용자가 직접 확인하도록 한다.
-- 최종 검증에서 로그인/권한/보호 화면 흐름이 관련되면 실제 operator/student 계정 흐름 또는 `node scripts/verify-local-login.mjs` 같은 로컬 로그인 검증을 사용한다.
+- 최종 검증에서 로그인/권한/보호 화면 흐름이 관련되면 실제 operator/student 계정 흐름과 `node scripts/verify-local-login.mjs` 같은 로컬 로그인 검증을 사용한다.
 - 사용자 데이터나 실제 DB 데이터를 변경하는 검증은 명시적 허용 없이 수행하지 않는다.
 
 ### 작업 중 새 문제 발견

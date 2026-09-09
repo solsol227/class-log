@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN =
@@ -70,7 +70,7 @@ export async function createLesson(
   _previousState: LessonCreateActionState,
   formData: FormData,
 ): Promise<LessonCreateActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
 
   const rawTitle = String(formData.get("title") ?? "");
   const startsAtInput = String(formData.get("starts_at") ?? "").trim();

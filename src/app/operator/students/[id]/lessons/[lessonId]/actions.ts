@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN =
@@ -39,7 +39,7 @@ export async function saveAttendance(
   _previousState: AttendanceActionState,
   formData: FormData,
 ): Promise<AttendanceActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
 
   const rawStatus = String(formData.get("status") ?? "").trim();
   const rawMemo = String(formData.get("memo") ?? "");
@@ -65,6 +65,17 @@ export async function saveAttendance(
 
   const status = rawStatus as AttendanceStatus;
   const supabase = await createSupabaseServerClient();
+  if (!access.isOwner) {
+    const { data: staffAssignment, error: staffAssignmentError } = await supabase
+      .from("lesson_staff")
+      .select("lesson_id")
+      .eq("lesson_id", lessonId)
+      .eq("staff_id", access.staffProfileId!)
+      .maybeSingle();
+    if (staffAssignmentError || !staffAssignment) {
+      return { fieldErrors: {}, formError: "본인이 담당자로 배정된 수업에서만 출결을 저장할 수 있습니다.", values };
+    }
+  }
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
     .select("id, starts_at, status")

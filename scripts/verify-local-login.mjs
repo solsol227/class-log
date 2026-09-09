@@ -20,6 +20,12 @@ async function verify(mode, email, password, destination) {
     const server = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, { cookies });
     const verified = await server.auth.getClaims();
     assert(verified.data?.claims);
+    if (mode === 'operator') {
+      const context = await server.rpc('get_my_operator_context');
+      console.log(mode, 'context', { success: !context.error && !!context.data, code: context.error?.code });
+      assert.ifError(context.error);
+      assert.equal(context.data?.accessLevel, 'owner');
+    }
     for (const path of ['/api/auth/role', destination]) {
       const result = await fetch('http://127.0.0.1:3000' + path, {
         method: path.startsWith('/api') ? 'POST' : 'GET', redirect: 'manual',

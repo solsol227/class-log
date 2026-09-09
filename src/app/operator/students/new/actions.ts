@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import {
   InvalidStudentNicknameError,
   normalizeStudentNickname,
@@ -35,7 +35,7 @@ export async function createStudent(
   _previousState: StudentCreateActionState,
   formData: FormData,
 ): Promise<StudentCreateActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
 
   const rawNickname = String(formData.get("nickname") ?? "");
   const password = String(formData.get("password") ?? "");

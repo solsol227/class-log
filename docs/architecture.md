@@ -354,3 +354,15 @@ PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 
 
 - 학생 계정 관리 전용 페이지
 - `rental_reservations`
+
+## 17. 직원 운영계정과 접근 권한
+
+`operator_accounts`가 `owner | staff` 접근 수준과 로그인 사용 상태의 단일 source of truth다. Auth `app_metadata.role`은 기존처럼 `operator | student` 진입 역할만 나타내며, 사용자가 수정할 수 있는 metadata와 `staff_profiles.role`은 접근 권한 판정에 사용하지 않는다.
+
+기존 유일한 operator Auth 사용자는 migration preflight로 다시 확인한 뒤 owner row로 bootstrap한다. 이메일·비밀번호·Auth ID는 변경하지 않고 직원 프로필에도 자동 연결하지 않는다. 직원은 `staff_profiles.auth_user_id`와 staff account가 함께 유효하고 직원 프로필이 active일 때만 접근할 수 있다.
+
+RLS는 operator 공통 SELECT, owner mutation, 담당 staff의 출결·피드백·댓글 mutation으로 분리한다. 기존 `is_operator()`는 owner mutation 의미로 좁히고, active account·현재 staff·lesson 담당 여부는 `private` SECURITY DEFINER helper가 확인한다. `get_my_operator_context()`만 로그인한 본인의 안전한 capability 계산을 위해 public RPC로 둔다.
+
+로그인 중지는 Auth ban과 `operator_accounts.is_login_enabled=false`를 함께 적용한다. Auth와 public DB는 단일 transaction이 아니므로 server action이 반대쪽 실패 시 보상 복구한다. 남아 있는 access token도 proxy, operator layout, server action, RPC/RLS의 active-account 확인에서 차단된다.
+
+직원 로그인 아이디는 NFKC 정규화, trim, 소문자화 후 `[a-z0-9_-]{4,32}`만 허용하고 `staff.classlog.demo` 내부 Auth 이메일로 결정적으로 변환한다. 합성 이메일은 public DB, UI, URL, 로그에 노출하지 않는다. owner는 기존 이메일로 로그인한다.

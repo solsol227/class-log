@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -26,7 +26,7 @@ function schedulingErrorCode(code?: string) {
 }
 
 export async function scheduleMakeup(makeupId: string, formData: FormData) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const replacementLessonId = String(formData.get("replacement_lesson_id") ?? "");
   if (!UUID_PATTERN.test(makeupId) || !UUID_PATTERN.test(replacementLessonId)) {
     redirect("/operator/makeup?error=invalid");
@@ -47,7 +47,7 @@ export async function scheduleMakeup(makeupId: string, formData: FormData) {
 }
 
 export async function rescheduleMakeup(makeupId: string, previousReplacementLessonId: string, formData: FormData) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const replacementLessonId = String(formData.get("replacement_lesson_id") ?? "");
   if (
     !UUID_PATTERN.test(makeupId)
@@ -76,7 +76,7 @@ export async function rescheduleMakeup(makeupId: string, previousReplacementLess
 }
 
 export async function updateMakeupReason(makeupId: string, formData: FormData) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const reason = String(formData.get("reason") ?? "");
   if (!UUID_PATTERN.test(makeupId)) redirect("/operator/makeup?error=invalid");
   const supabase = await createSupabaseServerClient();
@@ -93,7 +93,7 @@ export async function updateMakeupReason(makeupId: string, formData: FormData) {
 }
 
 export async function completeMakeupWithoutSchedule(makeupId: string, formData: FormData) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   if (!UUID_PATTERN.test(makeupId)) redirect("/operator/makeup?error=invalid");
   const note = String(formData.get("completion_note") ?? "");
   const supabase = await createSupabaseServerClient();
@@ -110,7 +110,7 @@ export async function completeMakeupWithoutSchedule(makeupId: string, formData: 
 }
 
 export async function restoreManualMakeupCompletion(makeupId: string) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   if (!UUID_PATTERN.test(makeupId)) redirect("/operator/makeup?error=invalid");
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("restore_manual_makeup_completion", {

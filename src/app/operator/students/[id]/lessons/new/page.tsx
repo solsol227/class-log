@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 
 type LessonCreatePageProps = {
   params: Promise<{ id: string }>;
@@ -8,7 +8,7 @@ type LessonCreatePageProps = {
 export default async function LessonCreatePage({
   params,
 }: LessonCreatePageProps) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   await params;
   redirect("/operator/schedules/new");
 }

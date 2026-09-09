@@ -9,7 +9,7 @@ import { PGlite } from '../.temp/pr24-validation/node_modules/@electric-sql/pgli
 const db = new PGlite();
 let stage = 'platform bootstrap';
 let passed = 0;
-const ids = Object.fromEntries(['operator', 'authA', 'authB', 'a', 'b'].map(k => [k, randomUUID()]));
+const ids = Object.fromEntries(['operator', 'staffAuth', 'otherStaffAuth', 'authA', 'authB', 'a', 'b'].map(k => [k, randomUUID()]));
 const check = (value, label) => { assert.ok(value, label); passed++; };
 const query = async (sql, args = []) => (await db.query(sql, args)).rows;
 const scalar = async (sql, args = []) => Object.values((await query(sql, args))[0])[0];
@@ -17,7 +17,8 @@ const claims = async (role, id) => {
   await db.query("select set_config('request.jwt.claims', $1, false)", [JSON.stringify({ sub: id, role: 'authenticated', app_metadata: { role } })]);
 };
 const blocked = async (fn, code, label) => {
-  try { await fn(); } catch (error) { check(error.code === code, `${label}: unexpected SQLSTATE ${error.code}`); return; }
+  const expectedCodes = Array.isArray(code) ? code : [code];
+  try { await fn(); } catch (error) { check(expectedCodes.includes(error.code), `${label}: unexpected SQLSTATE ${error.code}`); return; }
   assert.fail(`${label}: unexpectedly succeeded`);
 };
 const save = (id, category, programs = [], title = 'fixture schedule', status = 'draft', day = '2096-02-02') => scalar(
@@ -65,7 +66,13 @@ try {
     }
     await db.exec(await readFile(new URL(file, migrationDir), 'utf8'));
   }
-  check(files.length === 33, 'all 33 append-only migrations loaded');
+  check(files.length === 34, 'all 34 append-only migrations loaded');
+  stage = 'staff operator account bootstrap';
+  await claims('operator', ids.operator);
+  await db.query('insert into auth.users(id, raw_app_meta_data) values ($1,$2),($3,$2)', [ids.staffAuth, JSON.stringify({ role: 'operator' }), ids.otherStaffAuth]);
+  const staffId = await scalar("select public.create_staff_with_operator_account('fixture staff','vocal_trainer',$1,'staff_one')", [ids.staffAuth]);
+  const otherStaffId = await scalar("select public.create_staff_with_operator_account('other staff','manager',$1,'staff_two')", [ids.otherStaffAuth]);
+  check(await scalar("select public.get_my_operator_context()->>'accessLevel'") === 'owner', 'existing operator is bootstrapped as owner');
   stage = 'category and assignment regression';
   await claims('operator', ids.operator);
   await db.exec('set role authenticated');
@@ -183,14 +190,38 @@ try {
   check(Boolean(await save(null, 'weekday', [rental], 'rental in weekday', 'scheduled', '2096-02-12')), 'rental allowance accepted in weekday category');
 
   stage = 'RLS and RPC grants';
+  await claims('operator', ids.operator);
+  stage = 'staff assignment fixture';
+  await db.query('insert into public.lesson_staff(lesson_id,staff_id,role) values ($1,$3,$4),($2,$3,$4)', [source, lesson, staffId, 'vocal_trainer']);
+  stage = 'assigned staff checks';
+  await claims('operator', ids.staffAuth);
+  check(await scalar("select public.get_my_operator_context()->>'accessLevel'") === 'staff', 'active linked staff resolves staff context');
+  check(await scalar('select count(*)::int from public.students') === 2, 'active staff can read operational student data');
+  await blocked(() => save(null, 'trial'), '42501', 'staff cannot create schedules');
+  stage = 'assigned staff attendance';
+  check(Boolean(await scalar("update public.attendance_records set status='absent' where lesson_id=$1 and student_id=$2 returning id", [source, ids.a])), 'assigned staff can update attendance');
+  stage = 'assigned staff feedback';
+  check(Boolean(await scalar("insert into public.lesson_feedback(lesson_id,student_id,author_staff_id,body) values ($1,$2,$3,'staff feedback') returning id", [lesson, ids.a, staffId])), 'assigned staff can create own feedback');
+  check(await scalar("insert into public.lesson_feedback(lesson_id,student_id,author_staff_id,body) values ($1,$2,$3,'forged feedback') returning author_staff_id", [lesson, ids.a, otherStaffId]) === staffId, 'staff feedback provider is forced to self');
+  await claims('operator', ids.otherStaffAuth);
+  stage = 'unassigned staff attendance';
+  check((await query("update public.attendance_records set status='present' where lesson_id=$1 and student_id=$2 returning id", [source, ids.a])).length === 0, 'unassigned staff cannot update attendance');
+  await claims('operator', ids.operator);
+  stage = 'disable staff';
+  await scalar('select public.set_staff_operator_account_enabled($1,false)', [staffId]);
+  await claims('operator', ids.staffAuth);
+  check(await scalar('select public.get_my_operator_context() is null'), 'disabled staff has no operator context');
+  check(await scalar('select count(*)::int from public.students') === 0, 'disabled staff loses operational reads immediately');
+  await claims('operator', ids.operator);
+  await scalar('select public.set_staff_operator_account_enabled($1,true)', [staffId]);
   await claims('student', ids.authA);
   check(await scalar('select count(*)::int from public.students') === 1, 'student sees self only');
   check(await scalar('select count(*)::int from public.lessons where id=$1', [legacy]) === 0, 'student cannot see Draft');
   check(await scalar('select count(*)::int from public.lessons where id=$1', [lesson]) === 1, 'student sees own confirmed lesson');
-  await blocked(profileSave, '42501', 'student profile mutation denied');
-  await blocked(() => programsSave({}), '42501', 'student programs mutation denied');
-  await blocked(() => save(null, 'weekday'), '42501', 'student lesson mutation denied');
-  await blocked(() => scalar('select public.complete_makeup_without_schedule($1,null)', [manualMakeup]), '42501', 'student manual makeup completion denied');
+  await blocked(profileSave, ['42501', 'P0002'], 'student profile mutation denied');
+  await blocked(() => programsSave({}), ['42501', 'P0002'], 'student programs mutation denied');
+  await blocked(() => save(null, 'weekday'), ['42501', 'P0002'], 'student lesson mutation denied');
+  await blocked(() => scalar('select public.complete_makeup_without_schedule($1,null)', [manualMakeup]), ['42501', 'P0002'], 'student manual makeup completion denied');
   check(!await scalar("select has_function_privilege('anon','public.complete_makeup_without_schedule(uuid,text)','EXECUTE')"), 'anonymous manual completion RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.restore_manual_makeup_completion(uuid)','EXECUTE')"), 'anonymous manual restore RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.save_student_programs(uuid,jsonb)','EXECUTE')"), 'anonymous programs RPC denied');

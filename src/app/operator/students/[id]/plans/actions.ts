@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN =
@@ -37,7 +37,7 @@ export async function createMonthlyPlan(
   _previousState: PlanCreateActionState,
   formData: FormData,
 ): Promise<PlanCreateActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
 
   const rawMonth = String(formData.get("month") ?? "").trim();
   const rawTitle = String(formData.get("title") ?? "");
@@ -120,7 +120,7 @@ export async function addActivityItems(
   _previousState: ActivityItemsActionState,
   formData: FormData,
 ): Promise<ActivityItemsActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
 
   if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(planId)) {
     return { formError: "활동 항목을 등록하지 못했습니다." };
@@ -209,7 +209,7 @@ export async function publishMonthlyPlan(
   _previousState: PublishPlanActionState,
   formData: FormData,
 ): Promise<PublishPlanActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   void formData;
 
   if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(planId)) {
