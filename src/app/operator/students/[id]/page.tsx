@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { OperatorFeedbackList } from "@/components/feedback/operator-feedback-list";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { loadOperatorStudentFeedback } from "@/lib/feedback/operator-feedback";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
@@ -38,7 +38,7 @@ function StudentNotFound() {
 const PROGRAM_LABELS: Record<string, string> = { weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험", rental: "대여" };
 
 export default async function OperatorStudentDetailPage({ params, searchParams }: OperatorStudentDetailPageProps) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const { id } = await params;
   const notices = await searchParams;
   if (!UUID_PATTERN.test(id)) return <StudentNotFound />;
@@ -68,7 +68,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   if (programsError) console.error(programsError);
   if (activeProgramsError) console.error(activeProgramsError);
   if (allowanceError || adjustmentsError) console.error(allowanceError ?? adjustmentsError);
-  if (!lessonsError && allLessons) {
+  if (access.isOwner && !lessonsError && allLessons) {
     await syncElapsedLessonStatuses(supabase, allLessons.map((lesson) => lesson.id));
   }
   const recentFeedback = (await loadOperatorStudentFeedback(supabase, student)).slice(0, 4);
@@ -89,7 +89,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
       {notice ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">{notice}</p> : null}
 
       <div className="mt-6">
-      <StudentProfileCard programs={(programs ?? []).map((program) => ({ id: program.student_program_id, programType: program.program_type, storedStatus: program.stored_status, effectiveStatus: program.effective_status, startedAt: program.started_at, endedAt: program.ended_at, stopReason: program.stop_reason, baseAllowanceCount: program.base_allowance_count }))} student={{
+      <StudentProfileCard canManage={access.canManageStudents} programs={(programs ?? []).map((program) => ({ id: program.student_program_id, programType: program.program_type, storedStatus: program.stored_status, effectiveStatus: program.effective_status, startedAt: program.started_at, endedAt: program.ended_at, stopReason: program.stop_reason, baseAllowanceCount: program.base_allowance_count }))} student={{
           id: student.id,
           name: student.nickname,
           gender: student.gender,
@@ -106,7 +106,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
           <h2 id="recent-feedback-heading" className="text-2xl font-bold">최근 피드백</h2>
           <Link href={`/operator/students/${id}/feedback`} className="inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">전체 피드백 보기</Link>
         </div>
-        <OperatorFeedbackList items={recentFeedback} emptyMessage="등록된 피드백이 없습니다." />
+        <OperatorFeedbackList items={recentFeedback} emptyMessage="등록된 피드백이 없습니다." canEdit={access.isOwner} />
       </section>
 
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">
@@ -120,7 +120,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
               return <li key={`${status.student_program_id}-${status.period_month ?? "enrollment"}`} className="rounded-xl border border-[var(--line)] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{PROGRAM_LABELS[status.program_type] ?? status.program_type}</p><p className="mt-1 text-sm text-[var(--muted)]">{monthly ? `${status.period_month?.slice(0, 7)} 기준` : "등록 기간 전체"}</p></div><p className="font-bold text-[var(--accent-strong)]">남은 일반 이용권 {status.remaining_count ?? "미설정"}회</p></div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4"><div><dt className="text-[var(--muted)]">기본+추가</dt><dd className="font-bold">{status.base_allowance_count ?? "-"}+{status.operator_adjustment_count}</dd></div><div><dt className="text-[var(--muted)]">Draft</dt><dd className="font-bold">{status.draft_count}</dd></div><div><dt className="text-[var(--muted)]">예약/사용</dt><dd className="font-bold">{status.reserved_count}/{status.used_count}</dd></div><div><dt className="text-[var(--muted)]">보강 대기/예약/완료</dt><dd className="font-bold">{status.makeup_available_count}/{status.makeup_reserved_count}/{status.makeup_used_count}</dd></div></dl>
-                {status.base_allowance_count === null && status.program_type === "rental" ? <form action={configureRentalAllowance.bind(null, id, status.student_program_id)} className="mt-4 flex flex-wrap gap-2"><input type="number" name="allowance_count" min="1" required placeholder="총 제공 횟수" className="h-10 min-w-0 flex-1 rounded-lg border px-3"/><button className="h-10 rounded-lg border px-3 font-bold">대여 횟수 설정</button></form> : <form action={addAllowanceAdjustment.bind(null, id, status.student_program_id)} className="mt-4 grid gap-2 sm:grid-cols-[9rem_6rem_1fr_auto]">{monthly ? <input type="month" name="target_month" required defaultValue={status.period_month?.slice(0, 7)} className="h-10 rounded-lg border px-2"/> : <input type="hidden" name="target_month" value=""/>}<input type="number" name="delta" required placeholder="+1 / -1" className="h-10 rounded-lg border px-2"/><input name="reason" required placeholder="추가·정정 사유" className="h-10 rounded-lg border px-3"/><button className="h-10 rounded-lg border px-3 font-bold">이력 추가</button></form>}
+                {access.canManageStudentPrograms ? (status.base_allowance_count === null && status.program_type === "rental" ? <form action={configureRentalAllowance.bind(null, id, status.student_program_id)} className="mt-4 flex flex-wrap gap-2"><input type="number" name="allowance_count" min="1" required placeholder="총 제공 횟수" className="h-10 min-w-0 flex-1 rounded-lg border px-3"/><button className="h-10 rounded-lg border px-3 font-bold">대여 횟수 설정</button></form> : <form action={addAllowanceAdjustment.bind(null, id, status.student_program_id)} className="mt-4 grid gap-2 sm:grid-cols-[9rem_6rem_1fr_auto]">{monthly ? <input type="month" name="target_month" required defaultValue={status.period_month?.slice(0, 7)} className="h-10 rounded-lg border px-2"/> : <input type="hidden" name="target_month" value=""/>}<input type="number" name="delta" required placeholder="+1 / -1" className="h-10 rounded-lg border px-2"/><input name="reason" required placeholder="추가·정정 사유" className="h-10 rounded-lg border px-3"/><button className="h-10 rounded-lg border px-3 font-bold">이력 추가</button></form>) : null}
                 {programAdjustments.length ? <ul className="mt-3 space-y-1 border-t border-[var(--line)] pt-3 text-sm text-[var(--muted)]">{programAdjustments.map((item) => <li key={item.id}>{item.delta > 0 ? "+" : ""}{item.delta} · {item.reason} · {formatDateTime(item.created_at)}</li>)}</ul> : null}
               </li>;
             })}
@@ -131,7 +131,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-2xl font-bold">배정된 일정</h2>
-          {!lessonsError && !activeProgramsError && allLessons && allLessons.length > 0 && activePrograms?.length ? <ScheduleAssignmentPicker studentId={id} schedules={allLessons.filter((lesson) => lesson.status !== "cancelled").map((lesson) => ({ value: lesson.id, label: lesson.title, detail: formatDateTime(lesson.starts_at), disabled: assignedLessonIds.has(lesson.id), disabledLabel: "배정됨" }))} programs={activePrograms.map((program) => ({ value: program.id, label: ({ weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험", rental: "대여" } as Record<string, string>)[program.program_type] ?? program.program_type }))} /> : null}
+          {access.canManageAssignments && !lessonsError && !activeProgramsError && allLessons && allLessons.length > 0 && activePrograms?.length ? <ScheduleAssignmentPicker studentId={id} schedules={allLessons.filter((lesson) => lesson.status !== "cancelled").map((lesson) => ({ value: lesson.id, label: lesson.title, detail: formatDateTime(lesson.starts_at), disabled: assignedLessonIds.has(lesson.id), disabledLabel: "배정됨" }))} programs={activePrograms.map((program) => ({ value: program.id, label: ({ weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험", rental: "대여" } as Record<string, string>)[program.program_type] ?? program.program_type }))} /> : null}
         </div>
         {assignmentError || lessonsError ? (
           <p role="alert" className="mt-5 text-[var(--muted)]">배정된 일정을 불러오지 못했습니다.</p>

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { LogoutButton } from "@/components/auth/logout-button";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 
 export default async function OperatorLayout({ children }: { children: ReactNode }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess();
 
   return (
     <div className="min-h-[100dvh]">

@@ -48,7 +48,9 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
 ```
 
-`.env.local`은 Git에 포함되지 않습니다. 실제 키, 비밀번호, 개인정보를 코드나 README에 기록하거나 커밋하지 마세요. 현재 화면 확인에는 Supabase 값이 필요하지 않습니다.
+`.env.local`은 Git에 포함되지 않습니다. 실제 키, 비밀번호, 개인정보를 코드나 README에 기록하거나 커밋하지 마세요. 공개 화면의 레이아웃만 확인할 때는 Supabase 값이 필요하지 않지만, 로그인·권한·보호 화면을 검증할 때는 반드시 필요합니다.
+
+별도 git worktree에는 `.env.local`이 자동으로 복사되지 않습니다. 특히 production 검증에서는 `NEXT_PUBLIC_SUPABASE_URL`과 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`가 설정된 상태로 `npm run build`부터 다시 실행해야 합니다. `npm run start`에만 값을 전달하면 브라우저 번들에는 설정이 없어서 로그인 폼에 `일시적인 오류`가 표시될 수 있습니다. 값 자체를 터미널에 출력하거나 Git에 커밋하지 마세요.
 
 `SUPABASE_SECRET_KEY`는 서버 전용 비밀키이며 브라우저 코드에 전달하거나 노출하면 안 됩니다.
 

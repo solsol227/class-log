@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { loadOperatorStudentFeedback } from "@/lib/feedback/operator-feedback";
 import { STAFF_ROLE_LABELS } from "@/lib/feedback/student-feedback";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -25,7 +25,7 @@ export default async function StudentFeedbackEditorPage({ params, searchParams }
   params: Promise<{ lessonId: string; studentId: string }>;
   searchParams: Promise<{ feedbackUpdated?: string; feedbackError?: string; saved?: string }>;
 }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const [{ lessonId, studentId }, notices] = await Promise.all([params, searchParams]);
   if (!UUID_PATTERN.test(lessonId) || !UUID_PATTERN.test(studentId)) notFound();
 
@@ -48,7 +48,12 @@ export default async function StudentFeedbackEditorPage({ params, searchParams }
   const activeStaff = staff.filter((member) => member.is_active);
   const staffById = new Map(staff.map((member) => [member.id, member]));
   const savedAt = notices.feedbackUpdated === "1" && /^\d{10,16}$/.test(notices.saved ?? "") ? Number(notices.saved) : null;
-  const blockedReason = lesson.status === "draft" ? "Draft 일정은 확정한 뒤 피드백을 작성할 수 있습니다." : activeStaff.length ? null : "피드백 제공자로 선택할 수 있는 활성 직원이 없습니다.";
+  const { data: staffAssignment, error: staffAssignmentError } = access.isOwner
+    ? { data: { lesson_id: lessonId }, error: null }
+    : await supabase.from("lesson_staff").select("lesson_id").eq("lesson_id", lessonId).eq("staff_id", access.staffProfileId!).maybeSingle();
+  if (staffAssignmentError) throw new Error("담당자 배정을 확인하지 못했습니다.", { cause: staffAssignmentError });
+  const isAssignedStaff = access.isOwner || Boolean(staffAssignment);
+  const blockedReason = lesson.status === "draft" ? "Draft 일정은 확정한 뒤 피드백을 작성할 수 있습니다." : !isAssignedStaff ? "담당자로 배정된 일정에서만 피드백을 작성할 수 있습니다." : activeStaff.length ? null : "피드백 제공자로 선택할 수 있는 활성 직원이 없습니다.";
 
   return (
     <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
@@ -68,7 +73,7 @@ export default async function StudentFeedbackEditorPage({ params, searchParams }
         <h2 id="new-feedback-heading" className="text-2xl font-bold">새 피드백 작성</h2>
         {blockedReason ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 font-semibold text-amber-900">{blockedReason}</p> : (
           <form action={createStudentFeedback.bind(null, lessonId, studentId)} className="mt-5 grid gap-4">
-            <label className="grid gap-2 font-bold">제공 직원<select name="author_staff_id" required className="min-h-11 rounded-xl border border-[var(--line)] bg-white px-3 font-normal">{activeStaff.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {STAFF_ROLE_LABELS[member.role] ?? member.role}</option>)}</select></label>
+            {access.isOwner ? <label className="grid gap-2 font-bold">제공 직원<select name="author_staff_id" required className="min-h-11 rounded-xl border border-[var(--line)] bg-white px-3 font-normal">{activeStaff.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {STAFF_ROLE_LABELS[member.role] ?? member.role}</option>)}</select></label> : <p className="font-bold text-[var(--muted)]">제공 직원: 내 계정</p>}
             <label className="grid gap-2 font-bold">피드백 내용<textarea name="body" required maxLength={10000} rows={7} className="rounded-xl border border-[var(--line)] p-3 font-normal" /></label>
             <label className="flex min-h-11 items-center gap-3 font-bold"><input type="checkbox" name="published" /> 학생에게 게시</label>
             <button className="min-h-12 rounded-xl bg-[var(--accent)] px-5 font-bold text-white">피드백 추가</button>
@@ -81,21 +86,22 @@ export default async function StudentFeedbackEditorPage({ params, searchParams }
         {feedback.length ? <div className="mt-5 space-y-5">{feedback.map((item) => {
           const currentAuthor = staffById.get(item.authorStaffId);
           const authorOptions = staff.filter((member) => member.is_active || member.id === item.authorStaffId);
+          const canEdit = access.isOwner || (isAssignedStaff && item.authorStaffId === access.staffProfileId);
           return (
             <article key={item.id} id={`feedback-${item.id}`} className="scroll-mt-8 rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-7">
-              <form action={updateStudentFeedback.bind(null, lessonId, studentId, item.id)} className="grid gap-4">
+              {canEdit ? <form action={updateStudentFeedback.bind(null, lessonId, studentId, item.id)} className="grid gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-bold">{formatDateTime(item.createdAt)} 작성</p><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.publishedAt ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{item.publishedAt ? "게시" : "미게시"}</span></div>
-                <label className="grid gap-2 font-bold">제공 직원<select name="author_staff_id" required defaultValue={item.authorStaffId} className="min-h-11 rounded-xl border border-[var(--line)] bg-white px-3 font-normal">{authorOptions.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {STAFF_ROLE_LABELS[member.role] ?? member.role}{member.is_active ? "" : " (삭제된 직원)"}</option>)}</select></label>
+                {access.isOwner ? <label className="grid gap-2 font-bold">제공 직원<select name="author_staff_id" required defaultValue={item.authorStaffId} className="min-h-11 rounded-xl border border-[var(--line)] bg-white px-3 font-normal">{authorOptions.map((member) => <option key={member.id} value={member.id}>{member.display_name} · {STAFF_ROLE_LABELS[member.role] ?? member.role}{member.is_active ? "" : " (삭제된 직원)"}</option>)}</select></label> : <p className="font-bold">제공 직원: {currentAuthor?.display_name ?? "확인 불가"}</p>}
                 {!currentAuthor?.is_active ? <p className="text-sm text-amber-800">삭제된 직원은 기존 제공자 기록으로 유지할 수 있습니다. 제공자를 바꾸려면 활성 직원을 선택해 주세요.</p> : null}
                 <label className="grid gap-2 font-bold">피드백 내용<textarea name="body" required maxLength={10000} rows={7} defaultValue={item.body} className="rounded-xl border border-[var(--line)] p-3 font-normal" /></label>
                 <label className="flex min-h-11 items-center gap-3 font-bold"><input type="checkbox" name="published" defaultChecked={Boolean(item.publishedAt)} /> 학생에게 게시</label>
-                <div className="flex flex-wrap gap-2"><button className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-bold text-white">수정 저장</button><button formAction={deleteStudentFeedback.bind(null, lessonId, studentId, item.id)} className="min-h-11 rounded-xl border border-rose-300 px-4 font-bold text-rose-800">삭제</button></div>
-              </form>
+                <div className="flex flex-wrap gap-2"><button className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-bold text-white">수정 저장</button>{access.isOwner ? <button formAction={deleteStudentFeedback.bind(null, lessonId, studentId, item.id)} className="min-h-11 rounded-xl border border-rose-300 px-4 font-bold text-rose-800">삭제</button> : null}</div>
+              </form> : <div className="grid gap-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-bold">{formatDateTime(item.createdAt)} 작성</p><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.publishedAt ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{item.publishedAt ? "게시" : "미게시"}</span></div><p className="text-sm font-bold text-[var(--muted)]">제공 직원: {currentAuthor?.display_name ?? "확인 불가"}</p><p className="whitespace-pre-wrap leading-7">{item.body}</p></div>}
 
               <section className="mt-6 border-t border-[var(--line)] pt-5" aria-label="댓글과 답글">
                 <h3 className="text-lg font-bold">댓글 {item.commentCount}개</h3>
-                {item.comments.length ? <div className="mt-3 space-y-2">{item.comments.map((comment) => <article key={comment.id} className={`rounded-xl bg-[#f4f8f7] p-3 ${comment.parentCommentId ? "ml-3 border-l-2 border-[var(--line)] sm:ml-6" : ""}`}>{comment.deletedAt ? <p className="text-sm text-[var(--muted)]">삭제된 댓글입니다.</p> : <><p className="text-sm font-bold">{comment.authorName}<span className="ml-2 font-normal text-[var(--muted)]">{formatDateTime(comment.createdAt)}</span></p><p className="mt-1 whitespace-pre-wrap break-words">{comment.body}</p><form action={addStudentFeedbackComment.bind(null, lessonId, studentId, item.id)} className="mt-3 flex min-w-0 gap-2"><input type="hidden" name="parent_comment_id" value={comment.id} /><input name="body" required maxLength={2000} placeholder="답글" className="min-h-10 min-w-0 flex-1 rounded-lg border border-[var(--line)] px-3" /><button className="rounded-lg border border-[var(--accent)] px-3 font-bold text-[var(--accent-strong)]">답글</button></form></>}</article>)}</div> : <p className="mt-2 text-sm text-[var(--muted)]">아직 댓글이 없습니다.</p>}
-                <form action={addStudentFeedbackComment.bind(null, lessonId, studentId, item.id)} className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row"><input name="body" required maxLength={2000} placeholder="댓글을 입력하세요" className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--line)] px-3" /><button className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)]">댓글 등록</button></form>
+                {item.comments.length ? <div className="mt-3 space-y-2">{item.comments.map((comment) => <article key={comment.id} className={`rounded-xl bg-[#f4f8f7] p-3 ${comment.parentCommentId ? "ml-3 border-l-2 border-[var(--line)] sm:ml-6" : ""}`}>{comment.deletedAt ? <p className="text-sm text-[var(--muted)]">삭제된 댓글입니다.</p> : <><p className="text-sm font-bold">{comment.authorName}<span className="ml-2 font-normal text-[var(--muted)]">{formatDateTime(comment.createdAt)}</span></p><p className="mt-1 whitespace-pre-wrap break-words">{comment.body}</p>{isAssignedStaff ? <form action={addStudentFeedbackComment.bind(null, lessonId, studentId, item.id)} className="mt-3 flex min-w-0 gap-2"><input type="hidden" name="parent_comment_id" value={comment.id} /><input name="body" required maxLength={2000} placeholder="답글" className="min-h-10 min-w-0 flex-1 rounded-lg border border-[var(--line)] px-3" /><button className="rounded-lg border border-[var(--accent)] px-3 font-bold text-[var(--accent-strong)]">답글</button></form> : null}</>}</article>)}</div> : <p className="mt-2 text-sm text-[var(--muted)]">아직 댓글이 없습니다.</p>}
+                {isAssignedStaff ? <form action={addStudentFeedbackComment.bind(null, lessonId, studentId, item.id)} className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row"><input name="body" required maxLength={2000} placeholder="댓글을 입력하세요" className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--line)] px-3" /><button className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)]">댓글 등록</button></form> : null}
               </section>
             </article>
           );

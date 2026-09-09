@@ -32,7 +32,7 @@ type AssignedStudent = {
   makeupStatus: string | null;
 };
 
-export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, attendanceBlockedReason }: { lesson: Lesson; assignedStudents: AssignedStudent[]; studentOptions: StudentSelectOption[]; attendanceBlockedReason: string | null }) {
+export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, attendanceBlockedReason, canManageSchedules, canRecordAttendance }: { lesson: Lesson; assignedStudents: AssignedStudent[]; studentOptions: StudentSelectOption[]; attendanceBlockedReason: string | null; canManageSchedules: boolean; canRecordAttendance: boolean }) {
   const [editing, setEditing] = useState(false);
   const canEdit = lesson.status !== "cancelled";
   const editFormId = `schedule-edit-form-${lesson.id}`;
@@ -48,11 +48,11 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {lesson.status === "draft" ? <ConfirmDraftForm lessonId={lesson.id} /> : null}
-          {canEdit && !editing ? <button type="button" onClick={() => setEditing(true)} className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] active:translate-y-px">수정</button> : null}
-          {canEdit && editing ? <button type="submit" form={editFormId} className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px">저장</button> : null}
-          {canEdit && lesson.status !== "draft" && !editing ? <CancelScheduleForm lessonId={lesson.id} /> : null}
-          <DeleteScheduleForm lessonId={lesson.id} />
+          {canManageSchedules && lesson.status === "draft" ? <ConfirmDraftForm lessonId={lesson.id} /> : null}
+          {canManageSchedules && canEdit && !editing ? <button type="button" onClick={() => setEditing(true)} className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] active:translate-y-px">수정</button> : null}
+          {canManageSchedules && canEdit && editing ? <button type="submit" form={editFormId} className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px">저장</button> : null}
+          {canManageSchedules && canEdit && lesson.status !== "draft" && !editing ? <CancelScheduleForm lessonId={lesson.id} /> : null}
+          {canManageSchedules ? <DeleteScheduleForm lessonId={lesson.id} /> : null}
         </div>
       </div>
 
@@ -73,7 +73,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
           </dl>
           <div className="mt-8 border-t border-[var(--line)] pt-7">
             <h2 className="text-2xl font-bold">배정된 학생</h2>
-            {assignedStudents.length === 0 ? <p className="mt-4 text-[var(--muted)]">아직 배정된 학생이 없습니다.</p> : <RosterAttendanceForm lessonId={lesson.id} students={assignedStudents.map((student) => ({ id: student.id, name: `${student.name} · ${({ weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험", rental: "대여" } as Record<string, string>)[student.programType] ?? student.programType}`, status: student.attendanceStatus, makeupStatus: student.makeupStatus }))} blockedReason={attendanceBlockedReason} />}
+            {assignedStudents.length === 0 ? <p className="mt-4 text-[var(--muted)]">아직 배정된 학생이 없습니다.</p> : <RosterAttendanceForm lessonId={lesson.id} students={assignedStudents.map((student) => ({ id: student.id, name: `${student.name} · ${({ weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험", rental: "대여" } as Record<string, string>)[student.programType] ?? student.programType}`, status: student.attendanceStatus, makeupStatus: student.makeupStatus }))} blockedReason={canRecordAttendance ? attendanceBlockedReason : "본인이 담당자로 배정된 일정에서만 출결을 저장할 수 있습니다."} />}
           </div>
         </>
       )}

@@ -212,3 +212,19 @@
 - [x] 로컬 Supabase ref 일치·원격 DB branch 없음 확인 (primary DB로 취급)
 - [ ] PR 병합 후 primary Supabase migration 적용
 - [ ] operator/student RLS 회귀 검증
+
+## 구현·검증 완료 — 직원 개별 운영계정과 owner/staff 권한 (PR30)
+
+- [x] 실제 Auth/staff 분포와 local/remote migration 이력 read-only 확인
+- [x] 기존 유일 operator를 owner로 bootstrap하는 append-only migration
+- [x] 업무 역할과 접근 권한 source of truth 분리
+- [x] 신규·기존 직원 계정 생성과 실패 시 Auth 보상 삭제
+- [x] owner 전용 비밀번호 재설정·로그인 중지·재활성화
+- [x] 직원 보관·복원과 같은 Auth 계정 상태 연동
+- [x] 공통 `/operator/*` capability 기반 read-only UI
+- [x] 담당 staff 출결·피드백·댓글 server action 및 RLS 제한
+- [x] 로그인 중지 기존 세션의 proxy/layout/RPC/RLS 차단
+- [x] 합성 in-memory DB와 Auth 경계 회귀 테스트
+- [x] PR30 migration 원격 적용 및 DB lint
+- [x] 실제 staff 계정 생성·로그인·중지 브라우저 확인 (사용자가 직접 수행)
+- [ ] 후속 일정 hard delete·Draft 빠른 확정에서 owner capability 연결

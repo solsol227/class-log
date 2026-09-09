@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -64,7 +64,7 @@ export default async function LessonDetailPage({
   params,
   searchParams,
 }: LessonDetailPageProps) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
 
   const { id: studentId, lessonId } = await params;
   const { created, attendanceSaved } = await searchParams;
@@ -96,7 +96,13 @@ export default async function LessonDetailPage({
     }
     return <LessonUnavailable studentId={studentId} />;
   }
-  await syncElapsedLessonStatuses(supabase, [lesson.id]);
+  if (access.isOwner) await syncElapsedLessonStatuses(supabase, [lesson.id]);
+
+  const { data: staffAssignment, error: staffAssignmentError } = access.isOwner
+    ? { data: { lesson_id: lessonId }, error: null }
+    : await supabase.from("lesson_staff").select("lesson_id").eq("lesson_id", lessonId).eq("staff_id", access.staffProfileId!).maybeSingle();
+  if (staffAssignmentError) console.error(staffAssignmentError);
+  const canRecordAttendance = access.isOwner || Boolean(staffAssignment);
 
   const { data: attendance, error: attendanceError } = await supabase
     .from("attendance_records")
@@ -230,6 +236,10 @@ export default async function LessonDetailPage({
             className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-bold text-rose-900"
           >
             출결 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+          </p>
+        ) : !canRecordAttendance ? (
+          <p className="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 font-bold text-amber-950">
+            본인이 담당자로 배정된 수업에서만 출결을 저장할 수 있습니다.
           </p>
         ) : attendanceBlockedReason ? (
           <p className="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 font-bold text-amber-950">

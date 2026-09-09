@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OperatorFeedbackList } from "@/components/feedback/operator-feedback-list";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { parseFeedbackArchiveQuery } from "@/lib/feedback/archive-query";
 import { compareOperatorFeedbackAsc, compareOperatorFeedbackDesc, loadOperatorStudentFeedback } from "@/lib/feedback/operator-feedback";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -27,7 +27,7 @@ function archiveHref(studentId: string, values: Record<string, string | null | u
 }
 
 export default async function OperatorStudentFeedbackPage({ params, searchParams }: PageProps) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const [{ id }, rawQuery] = await Promise.all([params, searchParams]);
   if (!UUID_PATTERN.test(id)) notFound();
 
@@ -96,7 +96,7 @@ export default async function OperatorStudentFeedbackPage({ params, searchParams
 
       <section className="mt-7 rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-7" aria-labelledby="operator-feedback-results">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 id="operator-feedback-results" className="text-2xl font-bold">피드백 목록</h2><p className="text-sm font-semibold text-[var(--muted)]">{filtered.length}건</p></div>
-        <OperatorFeedbackList items={filtered} emptyMessage={allFeedback.length ? "선택한 조건에 맞는 피드백이 없습니다." : "등록된 피드백이 없습니다."} />
+        <OperatorFeedbackList items={filtered} emptyMessage={allFeedback.length ? "선택한 조건에 맞는 피드백이 없습니다." : "등록된 피드백이 없습니다."} canEdit={access.isOwner} />
         {!filtered.length && allFeedback.length ? <Link href={`/operator/students/${id}/feedback`} className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)]">필터 초기화</Link> : null}
       </section>
     </main>

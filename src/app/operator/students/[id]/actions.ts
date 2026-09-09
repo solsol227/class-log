@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import {
   InvalidStudentNicknameError,
   normalizeStudentNickname,
@@ -40,7 +40,7 @@ export type StudentAssignmentActionState = {
 };
 
 export async function addAllowanceAdjustment(studentId: string, studentProgramId: string, formData: FormData) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const targetMonthInput = String(formData.get("target_month") ?? "");
   const delta = Number(formData.get("delta"));
   const reason = String(formData.get("reason") ?? "").trim();
@@ -61,7 +61,7 @@ export async function addAllowanceAdjustment(studentId: string, studentProgramId
 }
 
 export async function configureRentalAllowance(studentId: string, studentProgramId: string, formData: FormData) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const allowanceCount = Number(formData.get("allowance_count"));
   if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(studentProgramId) || !Number.isInteger(allowanceCount) || allowanceCount <= 0) {
     redirect(`/operator/students/${studentId}?allowanceError=1`);
@@ -138,7 +138,7 @@ export async function assignScheduleToStudent(
   _previousState: StudentAssignmentActionState,
   formData: FormData,
 ): Promise<StudentAssignmentActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const lessonId = String(formData.get("lesson_id") ?? "");
   const studentProgramId = String(formData.get("student_program_id") ?? "");
 
@@ -168,7 +168,7 @@ export async function updateStudentProfile(
   _previousState: StudentProfileActionState,
   formData: FormData,
 ): Promise<StudentProfileActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const fieldErrors: ProfileFieldErrors = {};
 
   if (!UUID_PATTERN.test(studentId)) {
@@ -333,7 +333,7 @@ export async function updateStudentPrograms(
   _previousState: StudentProfileActionState,
   formData: FormData,
 ): Promise<StudentProfileActionState> {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const programChanges = parseProgramChanges(formData.get("program_changes"));
   if (!UUID_PATTERN.test(studentId) || !programChanges) {
     return { fieldErrors: { programs: "이용프로그램 변경 내용을 다시 확인해 주세요." } };
@@ -365,7 +365,7 @@ export async function deleteStudent(
   _previousState: DeleteStudentActionState,
 ): Promise<DeleteStudentActionState> {
   void _previousState;
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
 
   if (!UUID_PATTERN.test(studentId)) {
     return { formError: "학생 정보를 찾을 수 없습니다." };

@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ScheduleForm } from "../schedule-form";
 
 export default async function NewSchedulePage() {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
   const supabase = await createSupabaseServerClient();
   const [{ data: students, error }, { data: programs, error: programsError }] = await Promise.all([supabase.from("students").select("id, nickname").order("nickname"), supabase.from("student_programs").select("id, student_id, program_type, status, base_allowance_count").eq("status", "active")]);
   if (error || programsError) throw new Error("학생 목록을 불러오지 못했습니다.", { cause: error ?? programsError });

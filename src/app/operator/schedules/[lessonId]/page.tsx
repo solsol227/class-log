@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { buildCommentAuthorNames, collectCommentAuthorIds } from "@/lib/feedback/comment-authors";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
@@ -39,7 +39,7 @@ function ScheduleUnavailable() {
 }
 
 export default async function ScheduleDetailPage({ params, searchParams }: { params: Promise<{ lessonId: string }>; searchParams: Promise<{ created?: string; updated?: string; assigned?: string; unassigned?: string; attendanceSaved?: string; staffUpdated?: string; staffError?: string; feedbackError?: string }> }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
   const { lessonId } = await params;
   const notices = await searchParams;
   if (!UUID_PATTERN.test(lessonId)) return <ScheduleUnavailable />;
@@ -58,7 +58,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
     if (error) console.error(error);
     return <ScheduleUnavailable />;
   }
-  await syncElapsedLessonStatuses(supabase, [lesson.id]);
+  if (access.isOwner) await syncElapsedLessonStatuses(supabase, [lesson.id]);
 
   const [{ data: assignments, error: assignmentsError }, { data: students, error: studentsError }, { data: attendanceRecords, error: attendanceError }, { data: programs, error: programsError }, { data: staff }, { data: lessonStaff }, { data: feedback }, { data: comments }] = await Promise.all([
     supabase.from("lesson_assignments").select("student_id, student_program_id, assigned_at").eq("lesson_id", lessonId).is("unassigned_at", null).order("assigned_at"),
@@ -111,6 +111,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   const staffProfiles = staff ?? [];
   const activeStaff = staffProfiles.filter((member) => member.is_active);
   const assignedStaffIds = new Set((lessonStaff ?? []).map((entry) => entry.staff_id));
+  const isAssignedStaff = access.isOwner || Boolean(access.staffProfileId && assignedStaffIds.has(access.staffProfileId));
   const assignedStaffRoles = new Map((lessonStaff ?? []).map((entry) => [entry.staff_id, entry.role]));
   const staffAssignmentOptions = staffProfiles.filter((member) => member.is_active || assignedStaffIds.has(member.id));
   const feedbackIds = new Set((feedback ?? []).map((item) => item.id));
@@ -159,7 +160,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
     <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
       <nav aria-label="일정 상세 이동" className="flex flex-wrap items-center justify-between gap-3">
         <Link href="/operator/schedules" className="font-bold text-[var(--accent-strong)] underline-offset-4 hover:underline">일정 목록</Link>
-        <Link href="/operator/schedules/new" className="inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] bg-white px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">새 일정 등록</Link>
+        {access.canManageSchedules ? <Link href="/operator/schedules/new" className="inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] bg-white px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">새 일정 등록</Link> : null}
       </nav>
       {notice ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">{notice}</p> : null}
       {errorNotice ? <p role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-bold text-rose-900">{errorNotice}</p> : null}
@@ -181,9 +182,37 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
         assignedStudents={assignedStudents}
         studentOptions={students.map((student) => ({ id: student.id, name: student.nickname, programs: programs.filter((program) => program.student_id === student.id && (program.status === "active" || assignments.some((assignment) => assignment.student_program_id === program.id))).map((program) => ({ id: program.id, programType: program.program_type, status: program.status, allowanceConfigured: program.base_allowance_count !== null })) }))}
         attendanceBlockedReason={attendanceBlockedReason}
+        canManageSchedules={access.canManageSchedules}
+        canRecordAttendance={isAssignedStaff}
       />
-      <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6"><h2 className="text-2xl font-bold">담당 직원</h2><form action={updateLessonStaff.bind(null, lessonId)} className="mt-4 space-y-3">{staffAssignmentOptions.length === 0 ? <p className="text-[var(--muted)]">등록된 직원이 없습니다.</p> : staffAssignmentOptions.map((member) => <label key={member.id} className="flex items-center gap-3"><input type="checkbox" name="staff_ids" value={member.id} defaultChecked={assignedStaffIds.has(member.id)}/><span className="font-bold">{member.display_name}{member.is_active ? "" : " (삭제된 직원)"}</span><span className="text-sm text-[var(--muted)]">{(assignedStaffRoles.get(member.id) ?? member.role) === "manager" ? "매니저" : "보컬트레이너"}</span></label>)}<button className="mt-3 h-11 rounded-xl border border-[var(--accent)] px-4 font-bold">담당 저장</button></form></section>
-      <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6"><h2 className="text-2xl font-bold">피드백</h2>{lesson.status === "draft" ? <p className="mt-3 text-[var(--muted)]">Draft 일정은 확정한 뒤 피드백을 기록할 수 있습니다.</p> : assignedStudents.length && activeStaff.length ? <form action={createFeedback.bind(null, lessonId)} className="mt-4 grid gap-3"><select name="student_id" required className="h-11 rounded-xl border px-3">{assignedStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}</select><select name="author_staff_id" required className="h-11 rounded-xl border px-3">{activeStaff.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}</select><textarea name="body" required placeholder="피드백 내용" className="rounded-xl border p-3"/><label><input type="checkbox" name="published"/> 학생에게 게시</label><button className="h-11 rounded-xl bg-[var(--accent)] font-bold text-white">피드백 추가</button></form> : <p className="mt-3 text-[var(--muted)]">배정 학생과 직원을 등록하면 피드백을 추가할 수 있습니다.</p>}<ul className="mt-6 space-y-4">{(feedback ?? []).map((item) => <li key={item.id} className="rounded-xl border p-4"><form action={updateFeedback.bind(null, lessonId, item.id)} className="space-y-2"><textarea name="body" defaultValue={item.body} required className="w-full rounded-xl border p-3"/><label><input type="checkbox" name="published" defaultChecked={Boolean(item.published_at)}/> 게시</label><div className="flex gap-2"><button className="rounded-lg border px-3 py-2 font-bold">수정</button><button formAction={deleteFeedback.bind(null, lessonId, item.id)} className="rounded-lg border border-rose-300 px-3 py-2 font-bold text-rose-800">삭제</button></div></form><ul className="mt-3 space-y-2">{lessonComments.filter((comment) => comment.feedback_id === item.id).map((comment) => <li key={comment.id} className="rounded-lg bg-[#f4f8f7] p-3 text-sm"><p className="font-bold">{commentAuthorNames.get(comment.author_user_id) ?? "작성자 확인 불가"}<span className="ml-2 font-normal text-[var(--muted)]">{formatCommentTime(comment.created_at)}</span></p><p className="mt-1">{comment.body}</p><form action={addOperatorComment.bind(null, lessonId, item.id)} className="mt-2 flex gap-2"><input type="hidden" name="parent_comment_id" value={comment.id}/><input name="body" required placeholder="답글" className="h-9 flex-1 rounded-lg border px-2"/><button className="rounded-lg border px-3 font-bold">답글</button></form></li>)}</ul><form action={addOperatorComment.bind(null, lessonId, item.id)} className="mt-3 flex gap-2"><input name="body" required placeholder="댓글" className="h-10 flex-1 rounded-lg border px-3"/><button className="rounded-lg border px-3 font-bold">댓글</button></form></li>)}</ul></section>
+      <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6"><h2 className="text-2xl font-bold">담당 직원</h2>{access.canManageAssignments ? <form action={updateLessonStaff.bind(null, lessonId)} className="mt-4 space-y-3">{staffAssignmentOptions.length === 0 ? <p className="text-[var(--muted)]">등록된 직원이 없습니다.</p> : staffAssignmentOptions.map((member) => <label key={member.id} className="flex items-center gap-3"><input type="checkbox" name="staff_ids" value={member.id} defaultChecked={assignedStaffIds.has(member.id)}/><span className="font-bold">{member.display_name}{member.is_active ? "" : " (삭제된 직원)"}</span><span className="text-sm text-[var(--muted)]">{(assignedStaffRoles.get(member.id) ?? member.role) === "manager" ? "매니저" : "보컬트레이너"}</span></label>)}<button className="mt-3 h-11 rounded-xl border border-[var(--accent)] px-4 font-bold">담당 저장</button></form> : <p className="mt-4 text-[var(--muted)]">{staffAssignmentOptions.filter((member) => assignedStaffIds.has(member.id)).map((member) => member.display_name).join(", ") || "미배정"}</p>}</section>
+      <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6">
+        <h2 className="text-2xl font-bold">피드백</h2>
+        {lesson.status === "draft" ? <p className="mt-3 text-[var(--muted)]">Draft 일정은 확정한 뒤 피드백을 기록할 수 있습니다.</p>
+          : !isAssignedStaff ? <p className="mt-3 text-[var(--muted)]">담당자로 배정된 일정에서만 피드백을 작성할 수 있습니다.</p>
+          : assignedStudents.length && activeStaff.length ? <form action={createFeedback.bind(null, lessonId)} className="mt-4 grid gap-3">
+            <select name="student_id" required className="h-11 rounded-xl border px-3">{assignedStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}</select>
+            {access.isOwner ? <select name="author_staff_id" required className="h-11 rounded-xl border px-3">{activeStaff.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}</select> : <p className="text-sm font-bold text-[var(--muted)]">피드백 제공자: 내 계정</p>}
+            <textarea name="body" required placeholder="피드백 내용" className="rounded-xl border p-3"/>
+            <label><input type="checkbox" name="published"/> 학생에게 게시</label>
+            <button className="h-11 rounded-xl bg-[var(--accent)] font-bold text-white">피드백 추가</button>
+          </form> : <p className="mt-3 text-[var(--muted)]">배정 학생과 직원을 등록하면 피드백을 추가할 수 있습니다.</p>}
+        <ul className="mt-6 space-y-4">{(feedback ?? []).map((item) => {
+          const canEdit = access.isOwner || (isAssignedStaff && item.author_staff_id === access.staffProfileId);
+          return <li key={item.id} className="rounded-xl border p-4">
+            {canEdit ? <form action={updateFeedback.bind(null, lessonId, item.id)} className="space-y-2">
+              <textarea name="body" defaultValue={item.body} required className="w-full rounded-xl border p-3"/>
+              <label><input type="checkbox" name="published" defaultChecked={Boolean(item.published_at)}/> 게시</label>
+              <div className="flex gap-2"><button className="rounded-lg border px-3 py-2 font-bold">수정</button>{access.isOwner ? <button formAction={deleteFeedback.bind(null, lessonId, item.id)} className="rounded-lg border border-rose-300 px-3 py-2 font-bold text-rose-800">삭제</button> : null}</div>
+            </form> : <p className="whitespace-pre-wrap">{item.body}</p>}
+            <ul className="mt-3 space-y-2">{lessonComments.filter((comment) => comment.feedback_id === item.id).map((comment) => <li key={comment.id} className="rounded-lg bg-[#f4f8f7] p-3 text-sm">
+              <p className="font-bold">{commentAuthorNames.get(comment.author_user_id) ?? "작성자 확인 불가"}<span className="ml-2 font-normal text-[var(--muted)]">{formatCommentTime(comment.created_at)}</span></p><p className="mt-1">{comment.body}</p>
+              {isAssignedStaff ? <form action={addOperatorComment.bind(null, lessonId, item.id)} className="mt-2 flex gap-2"><input type="hidden" name="parent_comment_id" value={comment.id}/><input name="body" required placeholder="답글" className="h-9 flex-1 rounded-lg border px-2"/><button className="rounded-lg border px-3 font-bold">답글</button></form> : null}
+            </li>)}</ul>
+            {isAssignedStaff ? <form action={addOperatorComment.bind(null, lessonId, item.id)} className="mt-3 flex gap-2"><input name="body" required placeholder="댓글" className="h-10 flex-1 rounded-lg border px-3"/><button className="rounded-lg border px-3 font-bold">댓글</button></form> : null}
+          </li>;
+        })}</ul>
+      </section>
     </main>
   );
 }

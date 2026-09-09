@@ -204,3 +204,13 @@
 - 원격 적용: 2026-09-07 사용자 승인 후 dry-run에서 신규 migration 한 건만 확인하고 적용했다. 적용 후 local/remote 32개 일치, DB lint 무경고, nullable 컬럼·CHECK·INSERT trigger·구/신 RPC 병존을 읽기 전용으로 확인했다. 기존 일정 12건은 모두 NULL(미분류)로 유지했으며 사용자 row mutation, backfill, seed, history repair는 실행하지 않았다.
 - 한계: 실제 Auth 이메일 변경/복구와 migration 적용 후 브라우저·모바일 입력, 동시 두 DB 세션은 미실행이다. 기존 pgTAP/동시성 fixture의 새 카테고리 입력만 갱신했고 해당 테스트 파일 전체는 실행하지 않았다.
 - 다음: 사용자가 migration 적용 후 브라우저 흐름을 확인한다. commit/push/PR/merge 없음.
+
+## 2026-09-09 — Codex — PR30 직원 운영계정·owner/staff 권한 분리
+
+- 사전 조사: 최신 `origin/main`과 clean main, local/remote migration 33개 일치를 확인했다. 실제 Auth는 operator 1명·student 12명·예상 밖 role 0명·중지 계정 0명이었고, 직원 프로필 2명은 모두 Auth 미연결·active였다. 중복 이름, 중복/끊어진 연결, inactive 연결은 없었다. 이메일·UUID·secret은 출력하지 않았다.
+- 구현: 별도 `feat/staff-accounts` worktree에서 `operator_accounts`를 접근 권한 source of truth로 추가하고 기존 유일 operator를 owner로 bootstrap했다. 직원 아이디는 별도 내부 도메인으로 결정 변환하며 신규·기존 직원 계정 생성, 초기 비밀번호, 재설정, 중지·재활성화, 보관·복원의 Auth/DB 보상 흐름을 owner 전용으로 구현했다.
+- 권한: 기존 `is_operator()` mutation 의미를 owner로 좁히고 active operator SELECT, 담당 staff의 출결·본인 피드백·댓글 mutation 정책을 분리했다. proxy/layout/server action/RPC/RLS가 로그인 중지와 inactive 직원의 기존 세션을 재확인한다. owner/staff는 공통 `/operator/*` UI를 사용하며 staff에게 관리 버튼과 로그인 아이디·계정 상태를 숨긴다.
+- 검증: append-only migration 34개를 PGlite에 순서대로 적용하고 owner/staff/disabled staff/student/anon 및 담당·미담당 경계를 포함한 합성 데이터 60개 assertion을 통과했다. Auth outage/session/disabled-account 경계 테스트 7건, ESLint, TypeScript를 통과했다. 자동 회귀 검증 단계에서는 실제 업무 Auth 생성·비밀번호 변경·ban과 사용자 데이터 mutation을 수행하지 않았다.
+- 최종 확인: ESLint, `tsc --noEmit --incremental false`, production build, `git diff --check`를 통과했다. 적용 직전 원격 33개 migration과 단일 dry-run 대상을 재확인한 뒤 사용자 승인으로 `20260908230000_add_staff_operator_accounts.sql`만 적용했다. 적용 후 local/remote 34개 이력 일치, public/private/extensions DB lint 무경고다. 기존 owner 이메일 로그인·owner context·운영 일정 HTTP 200과 기존 학생 로그인·학생 일정 HTTP 200, 비인증 role 요청 401을 production 서버에서 확인했다. 일정 hard delete·Draft 빠른 확정 branch는 수정하거나 병합하지 않았다.
+- 브라우저 검증 환경 보완: 별도 worktree의 production build에 Git 제외 파일인 `.env.local`이 없어 브라우저 번들에 공개 Supabase 설정이 포함되지 않았고, 로그인 폼이 네트워크 요청 전에 `일시적인 오류`를 표시했다. 원본 checkout의 환경변수를 값 출력 없이 build와 start 프로세스 모두에 전달해 재빌드했다. 합성된 존재하지 않는 계정이 `입력한 계정 정보가 올바르지 않습니다`로 응답하는 것과 실제 테스트 owner/student 로그인·역할 API·보호 화면 200을 확인했다. 재발 방지 절차는 `docs/class-log-harness/SKILL.md`와 README에 기록했다.
+- 사용자 브라우저 확인: 실제 staff 계정 생성·로그인·로그인 중지 흐름을 사용자가 확인했다. PR30의 브라우저 확인 항목을 완료 처리했으며 비밀번호나 공개 환경변수 값은 기록하지 않았다.

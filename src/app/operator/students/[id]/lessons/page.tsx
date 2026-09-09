@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -44,7 +44,7 @@ function StudentUnavailable() {
 }
 
 export default async function LessonsPage({ params }: LessonsPageProps) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  const access = await requireOperatorAccess();
 
   const { id: studentId } = await params;
 
@@ -85,7 +85,7 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
   if (assignmentsError || lessonsError) {
     console.error(assignmentsError ?? lessonsError);
   }
-  if (!lessonsError) {
+  if (access.isOwner && !lessonsError) {
     await syncElapsedLessonStatuses(supabase, lessons.map((lesson) => lesson.id));
   }
 
@@ -107,12 +107,12 @@ export default async function LessonsPage({ params }: LessonsPageProps) {
             수업 일정
           </h1>
         </div>
-        <Link
+        {access.canManageSchedules ? <Link
           href="/operator/schedules/new"
           className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]"
         >
           공통 일정 등록
-        </Link>
+        </Link> : null}
       </header>
 
       {assignmentsError || lessonsError ? (

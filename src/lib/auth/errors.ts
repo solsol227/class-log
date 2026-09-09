@@ -5,6 +5,7 @@ export const AUTH_ERROR_CODES = [
   "session_expired",
   "invalid_role",
   "forbidden_route",
+  "account_disabled",
 ] as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
@@ -39,6 +40,10 @@ const AUTH_USER_MESSAGES: Record<AuthErrorCode, AuthUserMessage> = {
     message: "이 계정으로는 해당 화면에 접근할 수 없습니다.",
     action: "현재 계정에 맞는 화면으로 이동했습니다.",
   },
+  account_disabled: {
+    message: "이 계정은 현재 로그인할 수 없습니다.",
+    action: "수업 운영자에게 계정 상태를 확인해 달라고 요청해 주세요.",
+  },
 };
 
 const INVALID_CREDENTIAL_CODES = new Set([
@@ -61,6 +66,7 @@ const AUTH_NOTICE_TO_ERROR = {
   "session-expired": "session_expired",
   "invalid-role": "invalid_role",
   "forbidden-route": "forbidden_route",
+  "account-disabled": "account_disabled",
 } as const satisfies Record<string, AuthErrorCode>;
 
 export type AuthNotice = keyof typeof AUTH_NOTICE_TO_ERROR;

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ActivityItemsForm, PublishPlanForm } from "./plan-actions-forms";
 
@@ -47,7 +47,7 @@ export default async function PlanDetailPage({
   params,
   searchParams,
 }: PlanDetailPageProps) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+  await requireOperatorAccess({ owner: true });
 
   const { id: studentId, planId } = await params;
   const notices = await searchParams;

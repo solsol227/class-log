@@ -106,5 +106,30 @@ export async function updateSupabaseSession(request: NextRequest) {
     );
   }
 
+  if (role === "operator") {
+    const { data: operatorContext, error: operatorError } = await supabase.rpc(
+      "get_my_operator_context",
+    );
+
+    if (operatorError) {
+      return redirectWithCookies(
+        request,
+        response,
+        protectedRoute.loginPath,
+        "auth-unavailable",
+      );
+    }
+
+    if (!operatorContext) {
+      await supabase.auth.signOut();
+      return redirectWithCookies(
+        request,
+        response,
+        protectedRoute.loginPath,
+        "account-disabled",
+      );
+    }
+  }
+
   return response;
 }

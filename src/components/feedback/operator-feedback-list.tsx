@@ -16,7 +16,7 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
-export function OperatorFeedbackList({ items, emptyMessage }: { items: OperatorFeedbackItem[]; emptyMessage: string }) {
+export function OperatorFeedbackList({ items, emptyMessage, canEdit = true }: { items: OperatorFeedbackItem[]; emptyMessage: string; canEdit?: boolean }) {
   const [selected, setSelected] = useState<OperatorFeedbackItem | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -94,7 +94,7 @@ export function OperatorFeedbackList({ items, emptyMessage }: { items: OperatorF
               </section>
             </div>
             <footer className="flex shrink-0 items-center justify-center gap-3 border-t border-[var(--line)] bg-white p-4 sm:p-5">
-              <Link href={`/operator/schedules/${selected.lessonId}/students/${selected.studentId}/feedback#feedback-${selected.id}`} className="inline-flex min-h-11 min-w-24 items-center justify-center rounded-xl bg-[var(--accent)] px-5 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">수정</Link>
+              {canEdit ? <Link href={`/operator/schedules/${selected.lessonId}/students/${selected.studentId}/feedback#feedback-${selected.id}`} className="inline-flex min-h-11 min-w-24 items-center justify-center rounded-xl bg-[var(--accent)] px-5 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">수정</Link> : null}
               <button type="button" onClick={close} className="min-h-11 min-w-24 rounded-xl border border-[var(--line)] px-5 font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">닫기</button>
             </footer>
           </article>
