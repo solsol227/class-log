@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { requireOperatorAccess } from "@/lib/auth/operator-access";
-import { buildCommentAuthorNames, collectCommentAuthorIds } from "@/lib/feedback/comment-authors";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { AttendanceStatus } from "../actions";
 import { ScheduleDashboard } from "./schedule-dashboard";
 import { updateLessonStaff } from "../actions";
-import { addOperatorComment, createFeedback, deleteFeedback, updateFeedback } from "./feedback-actions";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ATTENDANCE_STATUSES = new Set<AttendanceStatus>(["present", "absent", "excused"]);
@@ -18,10 +16,6 @@ function formatDate(value: string) {
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" }).format(new Date(value));
-}
-
-function formatCommentTime(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
 function toScheduleInput(value: string) {
@@ -60,18 +54,17 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   }
   if (access.isOwner) await syncElapsedLessonStatuses(supabase, [lesson.id]);
 
-  const [{ data: assignments, error: assignmentsError }, { data: students, error: studentsError }, { data: attendanceRecords, error: attendanceError }, { data: programs, error: programsError }, { data: staff }, { data: lessonStaff }, { data: feedback }, { data: comments }] = await Promise.all([
+  const [{ data: assignments, error: assignmentsError }, { data: students, error: studentsError }, { data: attendanceRecords, error: attendanceError }, { data: programs, error: programsError }, { data: staff, error: staffError }, { data: lessonStaff, error: lessonStaffError }, { data: feedback, error: feedbackError }] = await Promise.all([
     supabase.from("lesson_assignments").select("student_id, student_program_id, assigned_at").eq("lesson_id", lessonId).is("unassigned_at", null).order("assigned_at"),
     supabase.from("students").select("id, nickname").order("nickname"),
     supabase.from("attendance_records").select("id, student_id, status").eq("lesson_id", lessonId),
     supabase.from("student_programs").select("id, student_id, program_type, status, base_allowance_count"),
     supabase.from("staff_profiles").select("id, display_name, role, is_active").order("display_name"),
     supabase.from("lesson_staff").select("staff_id, role").eq("lesson_id", lessonId),
-    supabase.from("lesson_feedback").select("id, student_id, author_staff_id, body, published_at, created_at").eq("lesson_id", lessonId).is("deleted_at", null).order("created_at"),
-    supabase.from("feedback_comments").select("id, feedback_id, parent_comment_id, author_user_id, body, created_at").order("created_at"),
+    supabase.from("lesson_feedback").select("id, student_id, author_staff_id, body, published_at, created_at, feedback_comments(count)").eq("lesson_id", lessonId).is("deleted_at", null).is("feedback_comments.deleted_at", null).order("created_at", { ascending: false }),
   ]);
-  if (assignmentsError || studentsError || attendanceError || programsError) {
-    throw new Error("일정과 학생 정보를 불러오지 못했습니다.", { cause: assignmentsError ?? studentsError ?? attendanceError });
+  if (assignmentsError || studentsError || attendanceError || programsError || staffError || lessonStaffError || feedbackError) {
+    throw new Error("일정과 학생 정보를 불러오지 못했습니다.", { cause: assignmentsError ?? studentsError ?? attendanceError ?? programsError ?? staffError ?? lessonStaffError ?? feedbackError });
   }
 
   const attendanceIds = attendanceRecords.map((record) => record.id);
@@ -112,21 +105,22 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   const activeStaff = staffProfiles.filter((member) => member.is_active);
   const assignedStaffIds = new Set((lessonStaff ?? []).map((entry) => entry.staff_id));
   const isAssignedStaff = access.isOwner || Boolean(access.staffProfileId && assignedStaffIds.has(access.staffProfileId));
+  const assignedActiveStaff = activeStaff.filter((member) => assignedStaffIds.has(member.id));
   const assignedStaffRoles = new Map((lessonStaff ?? []).map((entry) => [entry.staff_id, entry.role]));
   const staffAssignmentOptions = staffProfiles.filter((member) => member.is_active || assignedStaffIds.has(member.id));
-  const feedbackIds = new Set((feedback ?? []).map((item) => item.id));
-  const lessonComments = (comments ?? []).filter((comment) => feedbackIds.has(comment.feedback_id));
-  const commentAuthorIds = collectCommentAuthorIds(lessonComments);
-  const [commentStaffResult, commentStudentsResult] = commentAuthorIds.length
-    ? await Promise.all([
-        supabase.from("staff_profiles").select("auth_user_id, display_name").in("auth_user_id", commentAuthorIds),
-        supabase.from("students").select("auth_user_id, nickname").in("auth_user_id", commentAuthorIds),
-      ])
-    : [{ data: [], error: null }, { data: [], error: null }];
-  if (commentStaffResult.error || commentStudentsResult.error) {
-    throw new Error("댓글 작성자 정보를 불러오지 못했습니다.", { cause: commentStaffResult.error ?? commentStudentsResult.error });
-  }
-  const commentAuthorNames = buildCommentAuthorNames(lessonComments, commentStaffResult.data, commentStudentsResult.data);
+  const staffNames = new Map(staffProfiles.map((member) => [member.id, member.display_name]));
+  const feedbackByStudent = assignedStudents.map((student) => ({
+    studentId: student.id,
+    studentName: student.name,
+    items: (feedback ?? []).filter((item) => item.student_id === student.id).map((item) => ({
+      id: item.id,
+      body: item.body,
+      authorName: staffNames.get(item.author_staff_id) ?? "작성자 확인 불가",
+      publishedAt: item.published_at,
+      createdAt: item.created_at,
+      commentCount: item.feedback_comments?.[0]?.count ?? 0,
+    })),
+  }));
 
   const notice = notices.created === "1"
     ? "일정을 등록했습니다."
@@ -184,35 +178,18 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
         attendanceBlockedReason={attendanceBlockedReason}
         canManageSchedules={access.canManageSchedules}
         canRecordAttendance={isAssignedStaff}
+        feedbackByStudent={feedbackByStudent}
+        feedbackAuthorOptions={assignedActiveStaff.map((member) => ({ id: member.id, name: member.display_name }))}
+        feedbackBlockedReason={lesson.status === "draft"
+          ? "Draft 일정은 확정한 뒤 피드백을 작성할 수 있습니다."
+          : !isAssignedStaff
+            ? "담당자로 배정된 일정에서만 피드백을 작성할 수 있습니다."
+            : access.isOwner && assignedActiveStaff.length === 0
+              ? "피드백을 작성하려면 먼저 일정에 담당 직원을 배정해주세요."
+              : null}
+        isOwner={access.isOwner}
       />
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6"><h2 className="text-2xl font-bold">담당 직원</h2>{access.canManageAssignments ? <form action={updateLessonStaff.bind(null, lessonId)} className="mt-4 space-y-3">{staffAssignmentOptions.length === 0 ? <p className="text-[var(--muted)]">등록된 직원이 없습니다.</p> : staffAssignmentOptions.map((member) => <label key={member.id} className="flex items-center gap-3"><input type="checkbox" name="staff_ids" value={member.id} defaultChecked={assignedStaffIds.has(member.id)}/><span className="font-bold">{member.display_name}{member.is_active ? "" : " (삭제된 직원)"}</span><span className="text-sm text-[var(--muted)]">{(assignedStaffRoles.get(member.id) ?? member.role) === "manager" ? "매니저" : "보컬트레이너"}</span></label>)}<button className="mt-3 h-11 rounded-xl border border-[var(--accent)] px-4 font-bold">담당 저장</button></form> : <p className="mt-4 text-[var(--muted)]">{staffAssignmentOptions.filter((member) => assignedStaffIds.has(member.id)).map((member) => member.display_name).join(", ") || "미배정"}</p>}</section>
-      <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6">
-        <h2 className="text-2xl font-bold">피드백</h2>
-        {lesson.status === "draft" ? <p className="mt-3 text-[var(--muted)]">Draft 일정은 확정한 뒤 피드백을 기록할 수 있습니다.</p>
-          : !isAssignedStaff ? <p className="mt-3 text-[var(--muted)]">담당자로 배정된 일정에서만 피드백을 작성할 수 있습니다.</p>
-          : assignedStudents.length && activeStaff.length ? <form action={createFeedback.bind(null, lessonId)} className="mt-4 grid gap-3">
-            <select name="student_id" required className="h-11 rounded-xl border px-3">{assignedStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}</select>
-            {access.isOwner ? <select name="author_staff_id" required className="h-11 rounded-xl border px-3">{activeStaff.map((member) => <option key={member.id} value={member.id}>{member.display_name}</option>)}</select> : <p className="text-sm font-bold text-[var(--muted)]">피드백 제공자: 내 계정</p>}
-            <textarea name="body" required placeholder="피드백 내용" className="rounded-xl border p-3"/>
-            <label><input type="checkbox" name="published"/> 학생에게 게시</label>
-            <button className="h-11 rounded-xl bg-[var(--accent)] font-bold text-white">피드백 추가</button>
-          </form> : <p className="mt-3 text-[var(--muted)]">배정 학생과 직원을 등록하면 피드백을 추가할 수 있습니다.</p>}
-        <ul className="mt-6 space-y-4">{(feedback ?? []).map((item) => {
-          const canEdit = access.isOwner || (isAssignedStaff && item.author_staff_id === access.staffProfileId);
-          return <li key={item.id} className="rounded-xl border p-4">
-            {canEdit ? <form action={updateFeedback.bind(null, lessonId, item.id)} className="space-y-2">
-              <textarea name="body" defaultValue={item.body} required className="w-full rounded-xl border p-3"/>
-              <label><input type="checkbox" name="published" defaultChecked={Boolean(item.published_at)}/> 게시</label>
-              <div className="flex gap-2"><button className="rounded-lg border px-3 py-2 font-bold">수정</button>{access.isOwner ? <button formAction={deleteFeedback.bind(null, lessonId, item.id)} className="rounded-lg border border-rose-300 px-3 py-2 font-bold text-rose-800">삭제</button> : null}</div>
-            </form> : <p className="whitespace-pre-wrap">{item.body}</p>}
-            <ul className="mt-3 space-y-2">{lessonComments.filter((comment) => comment.feedback_id === item.id).map((comment) => <li key={comment.id} className="rounded-lg bg-[#f4f8f7] p-3 text-sm">
-              <p className="font-bold">{commentAuthorNames.get(comment.author_user_id) ?? "작성자 확인 불가"}<span className="ml-2 font-normal text-[var(--muted)]">{formatCommentTime(comment.created_at)}</span></p><p className="mt-1">{comment.body}</p>
-              {isAssignedStaff ? <form action={addOperatorComment.bind(null, lessonId, item.id)} className="mt-2 flex gap-2"><input type="hidden" name="parent_comment_id" value={comment.id}/><input name="body" required placeholder="답글" className="h-9 flex-1 rounded-lg border px-2"/><button className="rounded-lg border px-3 font-bold">답글</button></form> : null}
-            </li>)}</ul>
-            {isAssignedStaff ? <form action={addOperatorComment.bind(null, lessonId, item.id)} className="mt-3 flex gap-2"><input name="body" required placeholder="댓글" className="h-10 flex-1 rounded-lg border px-3"/><button className="rounded-lg border px-3 font-bold">댓글</button></form> : null}
-          </li>;
-        })}</ul>
-      </section>
     </main>
   );
 }
