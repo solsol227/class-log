@@ -7,6 +7,7 @@ import type { StudentSelectOption } from "../student-multi-select-field";
 import type { AttendanceStatus } from "../actions";
 import { CancelScheduleForm, ConfirmDraftForm, DeleteScheduleForm } from "./schedule-management-forms";
 import { RosterAttendanceForm } from "./roster-attendance-form";
+import type { FeedbackAuthorOption, StudentFeedbackModalData } from "./student-feedback-modal";
 
 type Lesson = {
   id: string;
@@ -32,7 +33,7 @@ type AssignedStudent = {
   makeupStatus: string | null;
 };
 
-export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, attendanceBlockedReason, canManageSchedules, canRecordAttendance }: { lesson: Lesson; assignedStudents: AssignedStudent[]; studentOptions: StudentSelectOption[]; attendanceBlockedReason: string | null; canManageSchedules: boolean; canRecordAttendance: boolean }) {
+export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, attendanceBlockedReason, canManageSchedules, canRecordAttendance, feedbackByStudent, feedbackAuthorOptions, feedbackBlockedReason, isOwner }: { lesson: Lesson; assignedStudents: AssignedStudent[]; studentOptions: StudentSelectOption[]; attendanceBlockedReason: string | null; canManageSchedules: boolean; canRecordAttendance: boolean; feedbackByStudent: StudentFeedbackModalData[]; feedbackAuthorOptions: FeedbackAuthorOption[]; feedbackBlockedReason: string | null; isOwner: boolean }) {
   const [editing, setEditing] = useState(false);
   const canEdit = lesson.status !== "cancelled";
   const editFormId = `schedule-edit-form-${lesson.id}`;
@@ -73,7 +74,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
           </dl>
           <div className="mt-8 border-t border-[var(--line)] pt-7">
             <h2 className="text-2xl font-bold">배정된 학생</h2>
-            {assignedStudents.length === 0 ? <p className="mt-4 text-[var(--muted)]">아직 배정된 학생이 없습니다.</p> : <RosterAttendanceForm lessonId={lesson.id} students={assignedStudents.map((student) => ({ id: student.id, name: `${student.name} · ${({ weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험", rental: "대여" } as Record<string, string>)[student.programType] ?? student.programType}`, status: student.attendanceStatus, makeupStatus: student.makeupStatus }))} blockedReason={canRecordAttendance ? attendanceBlockedReason : "본인이 담당자로 배정된 일정에서만 출결을 저장할 수 있습니다."} />}
+            {assignedStudents.length === 0 ? <p className="mt-4 text-[var(--muted)]">아직 배정된 학생이 없습니다.</p> : <RosterAttendanceForm lessonId={lesson.id} students={assignedStudents.map((student) => ({ id: student.id, name: `${student.name} · ${({ weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", trial: "체험", rental: "대여" } as Record<string, string>)[student.programType] ?? student.programType}`, status: student.attendanceStatus, makeupStatus: student.makeupStatus }))} blockedReason={canRecordAttendance ? attendanceBlockedReason : "본인이 담당자로 배정된 일정에서만 출결을 저장할 수 있습니다."} feedbackByStudent={feedbackByStudent} feedbackAuthorOptions={feedbackAuthorOptions} feedbackBlockedReason={feedbackBlockedReason} isOwner={isOwner} />}
           </div>
         </>
       )}

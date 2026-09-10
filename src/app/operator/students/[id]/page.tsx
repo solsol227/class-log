@@ -71,7 +71,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   if (access.isOwner && !lessonsError && allLessons) {
     await syncElapsedLessonStatuses(supabase, allLessons.map((lesson) => lesson.id));
   }
-  const recentFeedback = (await loadOperatorStudentFeedback(supabase, student)).slice(0, 4);
+  const recentFeedback = (await loadOperatorStudentFeedback(supabase, student, access)).slice(0, 4);
 
   const notice = notices.created === "1"
     ? "학생이 등록되었습니다."
@@ -106,7 +106,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
           <h2 id="recent-feedback-heading" className="text-2xl font-bold">최근 피드백</h2>
           <Link href={`/operator/students/${id}/feedback`} className="inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">전체 피드백 보기</Link>
         </div>
-        <OperatorFeedbackList items={recentFeedback} emptyMessage="등록된 피드백이 없습니다." canEdit={access.isOwner} />
+        <OperatorFeedbackList items={recentFeedback} emptyMessage="등록된 피드백이 없습니다." />
       </section>
 
       <section className="mt-6 rounded-2xl border border-[var(--line)] bg-white p-6 sm:p-8">

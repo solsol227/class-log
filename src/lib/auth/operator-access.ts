@@ -59,10 +59,11 @@ export async function loadOperatorAccess() {
   return parseOperatorContext(data);
 }
 
-export async function requireOperatorAccess(options?: { owner?: boolean }) {
-  await requireAuthenticatedUser("/login/operator", "operator");
+export async function requireOperatorAccess(options?: { owner?: boolean }): Promise<OperatorAccess & { authUserId: string }> {
+  const claims = await requireAuthenticatedUser("/login/operator", "operator");
   const access = await loadOperatorAccess();
   if (!access) redirect("/login/operator?notice=account-disabled");
   if (options?.owner && !access.isOwner) redirect("/operator/schedules?notice=forbidden-route");
-  return access;
+  if (typeof claims.sub !== "string") redirect("/login/operator?notice=invalid-role");
+  return { ...access, authUserId: claims.sub };
 }

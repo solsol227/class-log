@@ -8,6 +8,20 @@
 - 중립 lesson·이용권, deadlock·인증 장애 처리, 단일 학생 배정 보존·Draft 집계 비노출 검증 완료
 - 실제 merge 상태와 최종 commit은 Git/PR 이력을 기준으로 확인한다.
 
+## 구현·검증 완료 — PR32 일정 상세 학생별 피드백 modal
+
+- [x] 최신 PR31/PR30 포함 main에서 기능 브랜치 생성
+- [x] roster의 새 탭 작성 링크를 학생별 modal trigger로 전환
+- [x] 일정 상세 하단 피드백 대시보드 제거
+- [x] 신규 피드백 즉시 게시 및 저장 후 modal 유지
+- [x] 기존 피드백 읽기 전용 표시와 삭제되지 않은 댓글/답글 count 배지
+- [x] owner/staff 제공자와 담당 일정 관계 서버 재검증
+- [x] 학생별 독립 수정 route 제거 및 학생 피드백 조회 dialog inline 수정
+- [x] 조회 dialog에서 본인 댓글·답글 수정 및 soft-delete
+- [x] 학생 상세의 학생정보·이용프로그램 독립 카드와 영역별 action 정리
+- [x] ESLint / TypeScript / production build / diff check
+- [x] 사용자 production UI 확인
+
 ## 구현·검증 완료 — 일정 hard delete 및 Draft 목록 빠른 확정
 
 - [x] 최신 main 기준 별도 worktree와 append-only migration

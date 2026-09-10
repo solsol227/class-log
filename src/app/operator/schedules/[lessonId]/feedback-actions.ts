@@ -1,22 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function schedulePath(lessonId: string, error = false) {
-  return `/operator/schedules/${lessonId}${error ? "?feedbackError=1" : "?feedbackUpdated=1"}`;
-}
+export type FeedbackModalActionState = {
+  status: "idle" | "success" | "error";
+  message: string;
+  feedback?: {
+    id: string;
+    body: string;
+    authorName: string;
+    publishedAt: string;
+    createdAt: string;
+    commentCount: number;
+  };
+};
 
-function studentFeedbackPath(lessonId: string, studentId: string, state: "error" | "saved") {
-  const query = state === "error" ? "feedbackError=1" : `feedbackUpdated=1&saved=${Date.now()}`;
-  return `/operator/schedules/${lessonId}/students/${studentId}/feedback?${query}`;
-}
-
-function isUuid(value: string) { return UUID_PATTERN.test(value); }
+const isUuid = (value: string) => UUID_PATTERN.test(value);
 
 async function validateContext(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, lessonId: string, studentId: string) {
   if (!isUuid(lessonId) || !isUuid(studentId)) return false;
@@ -29,134 +32,49 @@ async function validateContext(supabase: Awaited<ReturnType<typeof createSupabas
     && Boolean(lessonResult.data && lessonResult.data.status !== "draft" && studentResult.data && assignmentResult.data);
 }
 
-async function validateActiveStaff(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, staffId: string) {
-  if (!isUuid(staffId)) return false;
-  const result = await supabase.from("staff_profiles").select("id").eq("id", staffId).eq("is_active", true).maybeSingle();
-  return !result.error && Boolean(result.data);
+async function findAssignedActiveStaff(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, lessonId: string, staffId: string) {
+  if (!isUuid(lessonId) || !isUuid(staffId)) return null;
+  const [assignmentResult, staffResult] = await Promise.all([
+    supabase.from("lesson_staff").select("staff_id").eq("lesson_id", lessonId).eq("staff_id", staffId).maybeSingle(),
+    supabase.from("staff_profiles").select("id, display_name").eq("id", staffId).eq("is_active", true).maybeSingle(),
+  ]);
+  if (assignmentResult.error || staffResult.error || !assignmentResult.data || !staffResult.data) return null;
+  return staffResult.data;
 }
 
-async function validateAssignedStaff(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  lessonId: string,
-  access: Awaited<ReturnType<typeof requireOperatorAccess>>,
-) {
+async function validateAssignedStaff(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, lessonId: string, access: Awaited<ReturnType<typeof requireOperatorAccess>>) {
   if (access.isOwner) return true;
   const result = await supabase.from("lesson_staff").select("lesson_id").eq("lesson_id", lessonId).eq("staff_id", access.staffProfileId!).maybeSingle();
   return !result.error && Boolean(result.data);
 }
 
-async function findFeedback(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, lessonId: string, feedbackId: string, studentId?: string) {
-  if (!isUuid(lessonId) || !isUuid(feedbackId) || (studentId && !isUuid(studentId))) return null;
-  let query = supabase.from("lesson_feedback").select("id, student_id, author_staff_id").eq("id", feedbackId).eq("lesson_id", lessonId).is("deleted_at", null);
-  if (studentId) query = query.eq("student_id", studentId);
-  const result = await query.maybeSingle();
-  return result.error ? null : result.data;
-}
-
 function revalidateFeedbackPaths(lessonId: string, studentId: string) {
   revalidatePath(`/operator/schedules/${lessonId}`);
-  revalidatePath(`/operator/schedules/${lessonId}/students/${studentId}/feedback`);
   revalidatePath(`/operator/students/${studentId}`);
   revalidatePath(`/operator/students/${studentId}/feedback`);
   revalidatePath(`/student/schedule/${lessonId}`);
   revalidatePath("/student/feedback");
 }
 
-export async function createFeedback(lessonId: string, formData: FormData) {
+export async function createModalFeedback(lessonId: string, studentId: string, _previousState: FeedbackModalActionState, formData: FormData): Promise<FeedbackModalActionState> {
   const access = await requireOperatorAccess();
   const body = String(formData.get("body") ?? "").trim();
-  const studentId = String(formData.get("student_id") ?? "");
+  if (!body) return { status: "error", message: "피드백 내용을 입력해 주세요." };
+  if (body.length > 10000) return { status: "error", message: "피드백은 10,000자 이하로 입력해 주세요." };
+
   const authorStaffId = access.isOwner ? String(formData.get("author_staff_id") ?? "") : access.staffProfileId!;
   const supabase = await createSupabaseServerClient();
-  if (!body || body.length > 10000 || !await validateAssignedStaff(supabase, lessonId, access) || !await validateContext(supabase, lessonId, studentId) || !await validateActiveStaff(supabase, authorStaffId)) redirect(schedulePath(lessonId, true));
-  const { data, error } = await supabase.from("lesson_feedback").insert({ lesson_id: lessonId, student_id: studentId, author_staff_id: authorStaffId, body, published_at: formData.get("published") === "on" ? new Date().toISOString() : null }).select("id").maybeSingle();
-  if (error || !data) redirect(schedulePath(lessonId, true));
+  const [contextAllowed, assignedStaffAllowed, author] = await Promise.all([
+    validateContext(supabase, lessonId, studentId),
+    validateAssignedStaff(supabase, lessonId, access),
+    findAssignedActiveStaff(supabase, lessonId, authorStaffId),
+  ]);
+  if (!contextAllowed || !assignedStaffAllowed || !author) return { status: "error", message: "피드백을 저장할 수 없습니다. 학생과 담당 직원 배정을 확인해 주세요." };
+
+  const publishedAt = new Date().toISOString();
+  const result = await supabase.from("lesson_feedback").insert({ lesson_id: lessonId, student_id: studentId, author_staff_id: authorStaffId, body, published_at: publishedAt }).select("id, body, published_at, created_at").maybeSingle();
+  if (result.error || !result.data) return { status: "error", message: "피드백을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+
   revalidateFeedbackPaths(lessonId, studentId);
-  redirect(schedulePath(lessonId));
-}
-
-export async function updateFeedback(lessonId: string, feedbackId: string, formData: FormData) {
-  const access = await requireOperatorAccess();
-  const body = String(formData.get("body") ?? "").trim();
-  const supabase = await createSupabaseServerClient();
-  const feedback = await findFeedback(supabase, lessonId, feedbackId);
-  if (!feedback || !body || body.length > 10000 || !await validateAssignedStaff(supabase, lessonId, access) || (!access.isOwner && feedback.author_staff_id !== access.staffProfileId) || !await validateContext(supabase, lessonId, feedback.student_id)) redirect(schedulePath(lessonId, true));
-  const { data, error } = await supabase.from("lesson_feedback").update({ body, published_at: formData.get("published") === "on" ? new Date().toISOString() : null }).eq("id", feedbackId).eq("lesson_id", lessonId).eq("student_id", feedback.student_id).is("deleted_at", null).select("id").maybeSingle();
-  if (error || !data) redirect(schedulePath(lessonId, true));
-  revalidateFeedbackPaths(lessonId, feedback.student_id);
-  redirect(schedulePath(lessonId));
-}
-
-export async function deleteFeedback(lessonId: string, feedbackId: string) {
-  await requireOperatorAccess({ owner: true });
-  const supabase = await createSupabaseServerClient();
-  const feedback = await findFeedback(supabase, lessonId, feedbackId);
-  if (!feedback || !await validateContext(supabase, lessonId, feedback.student_id)) redirect(schedulePath(lessonId, true));
-  const { data, error } = await supabase.from("lesson_feedback").update({ deleted_at: new Date().toISOString() }).eq("id", feedbackId).eq("lesson_id", lessonId).eq("student_id", feedback.student_id).is("deleted_at", null).select("id").maybeSingle();
-  if (error || !data) redirect(schedulePath(lessonId, true));
-  revalidateFeedbackPaths(lessonId, feedback.student_id);
-  redirect(schedulePath(lessonId));
-}
-
-export async function addOperatorComment(lessonId: string, feedbackId: string, formData: FormData) {
-  const access = await requireOperatorAccess();
-  const body = String(formData.get("body") ?? "").trim();
-  const parentCommentId = String(formData.get("parent_comment_id") ?? "") || null;
-  const supabase = await createSupabaseServerClient();
-  const feedback = await findFeedback(supabase, lessonId, feedbackId);
-  if (!feedback || !body || body.length > 2000 || (parentCommentId && !isUuid(parentCommentId)) || !await validateAssignedStaff(supabase, lessonId, access) || !await validateContext(supabase, lessonId, feedback.student_id)) redirect(schedulePath(lessonId, true));
-  const { data, error } = await supabase.from("feedback_comments").insert({ feedback_id: feedbackId, parent_comment_id: parentCommentId, body }).select("id").maybeSingle();
-  if (error || !data) redirect(schedulePath(lessonId, true));
-  revalidateFeedbackPaths(lessonId, feedback.student_id);
-  redirect(schedulePath(lessonId));
-}
-
-export async function createStudentFeedback(lessonId: string, studentId: string, formData: FormData) {
-  const access = await requireOperatorAccess();
-  const body = String(formData.get("body") ?? "").trim();
-  const authorStaffId = access.isOwner ? String(formData.get("author_staff_id") ?? "") : access.staffProfileId!;
-  const supabase = await createSupabaseServerClient();
-  if (!body || body.length > 10000 || !await validateAssignedStaff(supabase, lessonId, access) || !await validateContext(supabase, lessonId, studentId) || !await validateActiveStaff(supabase, authorStaffId)) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  const { data, error } = await supabase.from("lesson_feedback").insert({ lesson_id: lessonId, student_id: studentId, author_staff_id: authorStaffId, body, published_at: formData.get("published") === "on" ? new Date().toISOString() : null }).select("id").maybeSingle();
-  if (error || !data) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  revalidateFeedbackPaths(lessonId, studentId);
-  redirect(studentFeedbackPath(lessonId, studentId, "saved"));
-}
-
-export async function updateStudentFeedback(lessonId: string, studentId: string, feedbackId: string, formData: FormData) {
-  const access = await requireOperatorAccess();
-  const body = String(formData.get("body") ?? "").trim();
-  const authorStaffId = access.isOwner ? String(formData.get("author_staff_id") ?? "") : access.staffProfileId!;
-  const supabase = await createSupabaseServerClient();
-  const feedback = await findFeedback(supabase, lessonId, feedbackId, studentId);
-  const authorAllowed = feedback && (access.isOwner ? (authorStaffId === feedback.author_staff_id || await validateActiveStaff(supabase, authorStaffId)) : feedback.author_staff_id === access.staffProfileId);
-  if (!feedback || !body || body.length > 10000 || !await validateAssignedStaff(supabase, lessonId, access) || !await validateContext(supabase, lessonId, studentId) || !authorAllowed) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  const { data, error } = await supabase.from("lesson_feedback").update({ author_staff_id: authorStaffId, body, published_at: formData.get("published") === "on" ? new Date().toISOString() : null }).eq("id", feedbackId).eq("lesson_id", lessonId).eq("student_id", studentId).is("deleted_at", null).select("id").maybeSingle();
-  if (error || !data) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  revalidateFeedbackPaths(lessonId, studentId);
-  redirect(studentFeedbackPath(lessonId, studentId, "saved"));
-}
-
-export async function deleteStudentFeedback(lessonId: string, studentId: string, feedbackId: string) {
-  await requireOperatorAccess({ owner: true });
-  const supabase = await createSupabaseServerClient();
-  const feedback = await findFeedback(supabase, lessonId, feedbackId, studentId);
-  if (!feedback || !await validateContext(supabase, lessonId, studentId)) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  const { data, error } = await supabase.from("lesson_feedback").update({ deleted_at: new Date().toISOString() }).eq("id", feedbackId).eq("lesson_id", lessonId).eq("student_id", studentId).is("deleted_at", null).select("id").maybeSingle();
-  if (error || !data) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  revalidateFeedbackPaths(lessonId, studentId);
-  redirect(studentFeedbackPath(lessonId, studentId, "saved"));
-}
-
-export async function addStudentFeedbackComment(lessonId: string, studentId: string, feedbackId: string, formData: FormData) {
-  const access = await requireOperatorAccess();
-  const body = String(formData.get("body") ?? "").trim();
-  const parentCommentId = String(formData.get("parent_comment_id") ?? "") || null;
-  const supabase = await createSupabaseServerClient();
-  const feedback = await findFeedback(supabase, lessonId, feedbackId, studentId);
-  if (!feedback || !body || body.length > 2000 || (parentCommentId && !isUuid(parentCommentId)) || !await validateAssignedStaff(supabase, lessonId, access) || !await validateContext(supabase, lessonId, studentId)) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  const { data, error } = await supabase.from("feedback_comments").insert({ feedback_id: feedbackId, parent_comment_id: parentCommentId, body }).select("id").maybeSingle();
-  if (error || !data) redirect(studentFeedbackPath(lessonId, studentId, "error"));
-  revalidateFeedbackPaths(lessonId, studentId);
-  redirect(studentFeedbackPath(lessonId, studentId, "saved"));
+  return { status: "success", message: "피드백을 저장하고 학생에게 게시했습니다.", feedback: { id: result.data.id, body: result.data.body, authorName: author.display_name, publishedAt: result.data.published_at, createdAt: result.data.created_at, commentCount: 0 } };
 }

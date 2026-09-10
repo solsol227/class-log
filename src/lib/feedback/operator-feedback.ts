@@ -18,6 +18,7 @@ export type OperatorFeedbackItem = {
   createdAt: string;
   updatedAt: string;
   commentCount: number;
+  canEdit: boolean;
   comments: Array<{
     id: string;
     parentCommentId: string | null;
@@ -25,6 +26,7 @@ export type OperatorFeedbackItem = {
     createdAt: string;
     deletedAt: string | null;
     authorName: string;
+    canEdit: boolean;
   }>;
 };
 
@@ -37,15 +39,17 @@ type FeedbackRow = {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
 };
 
 export async function loadOperatorStudentFeedback(
   supabase: SupabaseClient,
   student: { id: string; nickname: string },
+  actor?: { authUserId: string; isOwner: boolean; staffProfileId: string | null },
 ) {
   const feedbackResult = await supabase
     .from("lesson_feedback")
-    .select("id, lesson_id, student_id, author_staff_id, body, published_at, created_at, updated_at")
+    .select("id, lesson_id, student_id, author_staff_id, body, published_at, created_at, updated_at, created_by")
     .eq("student_id", student.id)
     .is("deleted_at", null);
   if (feedbackResult.error) {
@@ -58,7 +62,7 @@ export async function loadOperatorStudentFeedback(
   const lessonIds = [...new Set(feedback.map((item) => item.lesson_id))];
   const feedbackIds = feedback.map((item) => item.id);
   const staffIds = [...new Set(feedback.map((item) => item.author_staff_id))];
-  const [lessonsResult, staffResult, commentsResult] = await Promise.all([
+  const [lessonsResult, staffResult, commentsResult, assignedStaffResult] = await Promise.all([
     supabase.from("lessons").select("id, title, starts_at, ends_at").in("id", lessonIds),
     supabase.from("staff_profiles").select("id, display_name, role").in("id", staffIds),
     supabase
@@ -66,8 +70,11 @@ export async function loadOperatorStudentFeedback(
       .select("id, feedback_id, parent_comment_id, author_user_id, body, created_at, deleted_at")
       .in("feedback_id", feedbackIds)
       .order("created_at", { ascending: true }),
+    actor && !actor.isOwner && actor.staffProfileId
+      ? supabase.from("lesson_staff").select("lesson_id").in("lesson_id", lessonIds).eq("staff_id", actor.staffProfileId)
+      : Promise.resolve({ data: [], error: null }),
   ]);
-  const loadError = lessonsResult.error ?? staffResult.error ?? commentsResult.error;
+  const loadError = lessonsResult.error ?? staffResult.error ?? commentsResult.error ?? assignedStaffResult.error;
   if (loadError) throw new Error("피드백 상세 정보를 불러오지 못했습니다.", { cause: loadError });
 
   const comments = commentsResult.data ?? [];
@@ -84,6 +91,7 @@ export async function loadOperatorStudentFeedback(
 
   const lessonById = new Map((lessonsResult.data ?? []).map((lesson) => [lesson.id, lesson]));
   const staffById = new Map((staffResult.data ?? []).map((member) => [member.id, member]));
+  const assignedLessonIds = new Set((assignedStaffResult.data ?? []).map((assignment) => assignment.lesson_id));
   const commentAuthorNames = buildCommentAuthorNames(comments, commentStaffResult.data ?? [], commentStudentsResult.data ?? []);
 
   return feedback.flatMap<OperatorFeedbackItem>((item) => {
@@ -107,6 +115,7 @@ export async function loadOperatorStudentFeedback(
       createdAt: item.created_at,
       updatedAt: item.updated_at,
       commentCount: itemComments.filter((comment) => !comment.deleted_at).length,
+      canEdit: Boolean(actor && (actor.isOwner || (assignedLessonIds.has(item.lesson_id) && (item.created_by === actor.authUserId || item.author_staff_id === actor.staffProfileId)))),
       comments: itemComments.map((comment) => ({
         id: comment.id,
         parentCommentId: comment.parent_comment_id,
@@ -114,6 +123,7 @@ export async function loadOperatorStudentFeedback(
         createdAt: comment.created_at,
         deletedAt: comment.deleted_at,
         authorName: commentAuthorNames.get(comment.author_user_id) ?? "작성자 확인 불가",
+        canEdit: Boolean(actor && comment.author_user_id === actor.authUserId),
       })),
     }];
   }).sort(compareOperatorFeedbackDesc);

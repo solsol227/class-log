@@ -354,9 +354,13 @@ PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 
 
 `/operator/students/[studentId]`는 삭제되지 않은 피드백을 수업일 최신순으로 정렬해 최근 4건만 요약하고, `/operator/students/[studentId]/feedback`은 같은 데이터를 KST 수업일 기간·정렬·게시 상태 URL 필터로 제공한다. 공통 조회 dialog는 전체 본문과 댓글을 표시하되 mutation form을 포함하지 않는다.
 
-`/operator/schedules/[lessonId]/students/[studentId]/feedback`은 그룹 일정의 active assignment 하나를 대상으로 하는 독립 작성 화면이다. 모든 피드백·댓글 mutation은 운영자 인증 뒤 lesson, student, active assignment, feedback의 lesson/student 조합을 다시 확인한다. 저장 뒤 일정 상세, 학생별 작성 화면, 학생 상세·전체 피드백, 학생 일정 상세·내 피드백을 함께 revalidate하며 다른 브라우저 탭의 미저장 form state는 갱신하지 않는다.
+학생별 독립 피드백 작성 route는 제거한다. 모든 피드백·댓글 mutation은 운영자 인증 뒤 lesson, student, active assignment, feedback의 lesson/student 조합을 다시 확인하고, 일정 상세, 학생 상세·전체 피드백, 학생 일정 상세·내 피드백을 함께 revalidate한다. 기존 `lesson_feedback`, `feedback_comments`, operator RLS와 assignment 복합 FK를 재사용하므로 별도 migration이나 RPC를 추가하지 않는다.
 
-이 흐름은 기존 `lesson_feedback`, `feedback_comments`, operator RLS와 assignment 복합 FK를 재사용하므로 별도 migration이나 RPC를 추가하지 않는다.
+일정 상세의 피드백 진입은 roster의 학생별 modal로 통일한다. modal은 새 피드백을 저장과 동시에 게시하고 열린 상태를 유지하며, 같은 lesson/student의 기존 피드백은 읽기 전용으로 표시한다. 댓글은 삭제되지 않은 최상위 댓글과 답글의 합계만 조회하고 본문은 modal payload에 포함하지 않는다.
+
+학생 상세와 전체 피드백의 조회 dialog는 별도 수정 page로 이동하지 않는다. 피드백 본문은 dialog 안의 inline textarea에서 수정하고, 로그인한 운영자가 직접 작성한 댓글·답글만 작은 수정·삭제 control을 표시한다. 댓글 소유권은 `author_user_id = auth.uid()`를 서버 action과 기존 RLS에서 함께 확인하며 삭제는 soft-delete다.
+
+새 피드백 제공자는 해당 일정에 배정된 활성 담당 직원으로 제한한다. staff는 로그인한 본인만 자동 사용하고 본인 담당 일정에서만 작성하며, owner는 담당자가 한 명이면 자동 선택하고 여러 명이면 그 범위 안에서 선택한다. 저장 action은 운영자 인증, active assignment, 담당 staff, 제공자와 lesson 관계를 다시 확인한다.
 
 ## 16. 후속 구조
 
