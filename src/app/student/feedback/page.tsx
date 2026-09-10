@@ -27,7 +27,7 @@ function formatLessonDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
-function formatPublishedDate(value: string) {
+function formatFeedbackDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
@@ -52,13 +52,12 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
   const feedbackResult = lessonIds.length
     ? await supabase
         .from("lesson_feedback")
-        .select("id, lesson_id, body, published_at")
+        .select("id, lesson_id, body, created_at")
         .in("lesson_id", lessonIds)
-        .not("published_at", "is", null)
         .is("deleted_at", null)
         .limit(STUDENT_FEEDBACK_LIMIT)
     : { data: [], error: null };
-  if (feedbackResult.error) throw new Error("게시된 피드백을 불러오지 못했습니다.", { cause: feedbackResult.error });
+  if (feedbackResult.error) throw new Error("피드백을 불러오지 못했습니다.", { cause: feedbackResult.error });
 
   const feedback = feedbackResult.data ?? [];
   const feedbackIds = feedback.map((item) => item.id);
@@ -77,7 +76,7 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
   const sortedFeedback = [...feedback].sort((left, right) => {
     const lessonDifference = (lessonOrder.get(left.lesson_id) ?? Number.MAX_SAFE_INTEGER) - (lessonOrder.get(right.lesson_id) ?? Number.MAX_SAFE_INTEGER);
     if (lessonDifference !== 0) return lessonDifference;
-    return (left.published_at ?? "").localeCompare(right.published_at ?? "") * (parsed.sort === "asc" ? 1 : -1);
+    return left.created_at.localeCompare(right.created_at) * (parsed.sort === "asc" ? 1 : -1);
   });
 
   return (
@@ -85,7 +84,7 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
       <header>
         <p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">클래스로그</p>
         <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">내 피드백</h1>
-        <p className="mt-3 text-[var(--muted)]">수업별로 게시된 공식 피드백을 확인하세요.</p>
+        <p className="mt-3 text-[var(--muted)]">수업별 공식 피드백을 확인하세요.</p>
       </header>
 
       <section className="mt-7 rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-5" aria-labelledby="feedback-filters">
@@ -129,7 +128,7 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
                     <time className="font-bold text-[var(--accent-strong)]" dateTime={lesson.starts_at}>{formatLessonDate(lesson.starts_at)}</time>
                   </div>
                   <h2 className="mt-3 text-xl font-bold tracking-[-0.02em]">{lesson.title}</h2>
-                  <p className="mt-2 text-sm text-[var(--muted)]">{author ? `${author.display_name} · ${STAFF_ROLE_LABELS[author.role] ?? author.role}` : "피드백 제공자"}{item.published_at ? ` · ${formatPublishedDate(item.published_at)} 게시` : ""}</p>
+                  <p className="mt-2 text-sm text-[var(--muted)]">{author ? `${author.display_name} · ${STAFF_ROLE_LABELS[author.role] ?? author.role}` : "피드백 제공자"} · {formatFeedbackDate(item.created_at)}</p>
                   <p className="mt-5 whitespace-pre-wrap break-words text-[1.05rem] leading-8">{item.body}</p>
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
                     <span className="text-sm font-semibold text-[var(--muted)]">댓글 {commentCounts.get(item.id) ?? 0}개</span>
@@ -142,7 +141,7 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
         </ol>
       ) : (
         <div className="mt-7 rounded-2xl border border-[var(--line)] bg-white p-6">
-          <p className="font-bold">선택한 기간에 게시된 피드백이 없습니다.</p>
+          <p className="font-bold">선택한 기간에 피드백이 없습니다.</p>
           <Link href="/student/feedback" className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">필터 초기화</Link>
         </div>
       )}

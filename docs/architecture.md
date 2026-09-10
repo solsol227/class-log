@@ -76,6 +76,7 @@ PR24에서는 `save_student_profile`과 `save_student_programs` RPC로 저장 �
 - 미래 활성 일정 배정이 있는 enrollment는 중단할 수 없다.
 - 프로그램 변경 묶음 중 하나라도 실패하면 프로그램 변경 전체를 rollback한다. 기본정보와 Auth 이메일 변경·실패 시 복구는 기본정보 action에만 남긴다.
 - 각 편집 form의 저장·취소·미저장 상태를 분리하며 다른 영역 저장의 revalidation으로 편집 중 프로그램 snapshot을 교체하지 않는다.
+- 학생 기본정보와 이용프로그램 편집은 계속 별도 카드·action으로 유지한다. 이용 횟수 현황·조정·이력은 이용프로그램 편집의 해당 enrollment 카드 안에 표시하고 별도 읽기 전용 대시보드는 두지 않는다.
 
 학생 목록 상태와 이용프로그램 필터는 저장 컬럼을 추가하지 않고 enrollment/view로 계산한다.
 
@@ -132,6 +133,8 @@ DB `lessons.status`와 화면 표시 상태는 같은 의미를 사용한다.
 
 재배정 시 기존 row를 재활성화하며 `assigned_at`의 최초 의미를 보존한다.
 `student_program_id`는 이 학생의 해당 일정 참여가 사용하는 이용권이다. 같은 lesson의 학생들이 서로 다른 프로그램 이용권을 사용할 수 있으며 `assignment_purpose`는 두지 않는다.
+
+학생 상세의 다중 배정은 `assign_student_to_lessons(uuid[], uuid, uuid)` 한 번으로 처리한다. owner 권한, 학생·active enrollment, 전체 lesson 집합, 중복·기존 active assignment·보강 충돌을 같은 transaction에서 검증하고 학생 advisory lock과 기존 quota/충돌 trigger를 재사용한다. 한 batch는 하나의 enrollment만 사용하며 하나라도 실패하면 전체 rollback한다.
 
 Draft assignment는 quota에 포함하지 않는다. Scheduled/Completed assignment는 quota에 포함하며, 시작 전이고 attendance/feedback이 없을 때만 soft-unassign으로 반환할 수 있다. 보강 replacement는 일반 quota가 아니라 연결된 독립 보강권을 사용한다.
 
@@ -215,7 +218,6 @@ PR30 병합 후 삭제와 Draft 확정은 서버의 `requireOperatorAccess({ own
 - 같은 lesson+student에 여러 건 허용
 - `author_staff_id`: 실제 피드백 제공자
 - `created_by`: 시스템 입력자
-- `published_at`
 - `deleted_at`
 
 `feedback_comments`:
@@ -227,7 +229,9 @@ PR30 병합 후 삭제와 Draft 확정은 서버의 `requireOperatorAccess({ own
 
 기존 `feedback_responses`는 제거 완료했다.
 
-학생은 게시되고 삭제되지 않은 자기 피드백만 볼 수 있으며 Draft 일정의 피드백은 볼 수 없다.
+피드백은 작성 즉시 학생에게 보이는 단일 상태다. 학생은 active assignment로 연결된 비-Draft 일정의 삭제되지 않은 자기 피드백만 볼 수 있다.
+
+피드백과 댓글 삭제는 `deleted_at` soft-delete 후 7일 복구 유예를 둔다. `private.purge_deleted_feedback()`을 pg_cron이 매시간 실행해 만료된 row를 물리 삭제한다. 삭제된 피드백의 대화 전체는 함께 삭제하고, 개별 삭제 댓글의 미삭제 답글은 parent 연결만 해제해 보존한다. 함수는 외부 role에 공개하지 않는다.
 
 ## 9. 보강
 
@@ -342,7 +346,7 @@ RLS 재귀 방지를 위해 `private` schema의 security-definer helper를 사�
 
 ## 14. 학생 일정 상세와 피드백 아카이브
 
-`/student/schedule/[lessonId]`는 학생 RLS가 허용한 active assignment의 비-Draft 일정만 표시한다. 일정 내부 메모와 직원 인증 정보는 조회하지 않으며, 본인 출결과 게시·미삭제 피드백 및 그 댓글만 bounded query로 읽는다.
+`/student/schedule/[lessonId]`는 학생 RLS가 허용한 active assignment의 비-Draft 일정만 표시한다. 일정 내부 메모와 직원 인증 정보는 조회하지 않으며, 본인 출결과 미삭제 피드백 및 그 댓글만 bounded query로 읽는다.
 
 PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 컬럼이 아닌 학생 본인의 active assignment에 연결된 `student_programs.program_type`에서 조회한다.
 
@@ -352,11 +356,11 @@ PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 
 
 ## 15. 운영자 학생별 피드백 조회와 작성
 
-`/operator/students/[studentId]`는 삭제되지 않은 피드백을 수업일 최신순으로 정렬해 최근 4건만 요약하고, `/operator/students/[studentId]/feedback`은 같은 데이터를 KST 수업일 기간·정렬·게시 상태 URL 필터로 제공한다. 공통 조회 dialog는 전체 본문과 댓글을 표시하되 mutation form을 포함하지 않는다.
+`/operator/students/[studentId]`는 삭제되지 않은 피드백을 수업일 최신순으로 정렬해 최근 4건만 요약하고, `/operator/students/[studentId]/feedback`은 같은 데이터를 KST 수업일 기간·정렬 URL 필터로 제공한다. 최근 카드에는 날짜와 오른쪽 상단 상세 진입, 일정명, 한 줄 본문, 제공 직원과 댓글 수만 표시한다.
 
 학생별 독립 피드백 작성 route는 제거한다. 모든 피드백·댓글 mutation은 운영자 인증 뒤 lesson, student, active assignment, feedback의 lesson/student 조합을 다시 확인하고, 일정 상세, 학생 상세·전체 피드백, 학생 일정 상세·내 피드백을 함께 revalidate한다. 기존 `lesson_feedback`, `feedback_comments`, operator RLS와 assignment 복합 FK를 재사용하므로 별도 migration이나 RPC를 추가하지 않는다.
 
-일정 상세의 피드백 진입은 roster의 학생별 modal로 통일한다. modal은 새 피드백을 저장과 동시에 게시하고 열린 상태를 유지하며, 같은 lesson/student의 기존 피드백은 읽기 전용으로 표시한다. 댓글은 삭제되지 않은 최상위 댓글과 답글의 합계만 조회하고 본문은 modal payload에 포함하지 않는다.
+일정 상세의 피드백 진입은 roster의 학생별 modal로 통일한다. modal은 새 피드백을 저장하고 열린 상태를 유지하며, 같은 lesson/student의 기존 피드백은 읽기 전용으로 표시한다. 댓글은 삭제되지 않은 최상위 댓글과 답글의 합계만 조회하고 본문은 modal payload에 포함하지 않는다.
 
 학생 상세와 전체 피드백의 조회 dialog는 별도 수정 page로 이동하지 않는다. 피드백 본문은 dialog 안의 inline textarea에서 수정하고, 로그인한 운영자가 직접 작성한 댓글·답글만 작은 수정·삭제 control을 표시한다. 댓글 소유권은 `author_user_id = auth.uid()`를 서버 action과 기존 RLS에서 함께 확인하며 삭제는 soft-delete다.
 

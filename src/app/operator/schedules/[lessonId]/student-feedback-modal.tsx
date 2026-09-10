@@ -2,6 +2,12 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import {
+  deleteFeedbackFromDialog,
+  updateFeedbackFromDialog,
+  type FeedbackDeleteActionState,
+  type FeedbackDialogActionState,
+} from "@/app/operator/students/feedback-actions";
 import { createModalFeedback, type FeedbackModalActionState } from "./feedback-actions";
 
 export type FeedbackAuthorOption = { id: string; name: string };
@@ -10,9 +16,10 @@ export type StudentFeedbackModalItem = {
   id: string;
   body: string;
   authorName: string;
-  publishedAt: string | null;
   createdAt: string;
   commentCount: number;
+  canEdit: boolean;
+  canDelete: boolean;
 };
 
 export type StudentFeedbackModalData = {
@@ -22,6 +29,8 @@ export type StudentFeedbackModalData = {
 };
 
 const INITIAL_STATE: FeedbackModalActionState = { status: "idle", message: "" };
+const EDIT_INITIAL_STATE: FeedbackDialogActionState = { status: "idle", message: "" };
+const DELETE_INITIAL_STATE: FeedbackDeleteActionState = { status: "idle", message: "" };
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -41,6 +50,60 @@ function SaveButton() {
   );
 }
 
+function ExistingFeedbackEditor({ studentId, item, onDeleted }: {
+  studentId: string;
+  item: StudentFeedbackModalItem;
+  onDeleted: (feedbackId: string) => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [body, setBody] = useState(item.body);
+  const [editState, editAction] = useActionState(async (previous: FeedbackDialogActionState, formData: FormData) => {
+    const result = await updateFeedbackFromDialog(studentId, item.id, previous, formData);
+    if (result.status === "success" && result.body) setBody(result.body);
+    return result;
+  }, EDIT_INITIAL_STATE);
+  const [deleteState, deleteAction] = useActionState(async (previous: FeedbackDeleteActionState, formData: FormData) => {
+    const result = await deleteFeedbackFromDialog(studentId, item.id, previous, formData);
+    if (result.status === "success" && result.deletedId) onDeleted(result.deletedId);
+    return result;
+  }, DELETE_INITIAL_STATE);
+
+  return <article>
+    <p className="flex flex-wrap items-center gap-1.5 text-sm text-[var(--muted)]">
+      <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
+      <span aria-hidden="true">·</span>
+      <span>{item.authorName}</span>
+      {item.commentCount > 0 ? <><span aria-hidden="true">·</span><span className="rounded-full bg-[#e5f2f0] px-2.5 py-1 text-xs font-bold text-[var(--accent-strong)]">댓글 {item.commentCount}</span></> : null}
+    </p>
+    <div
+      className={`mt-2 rounded-xl border border-[var(--line)] p-3 transition ${item.canEdit ? "cursor-text hover:border-[var(--accent)] focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[#bce9e4]" : "bg-[#f8faf9]"}`}
+      onClick={(event) => { if (item.canEdit && !(event.target instanceof HTMLButtonElement)) textareaRef.current?.focus(); }}
+    >
+      <form action={editAction}>
+        <textarea
+          ref={textareaRef}
+          name="body"
+          required
+          readOnly={!item.canEdit}
+          maxLength={10000}
+          rows={2}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          aria-label={`${item.authorName} 피드백 내용`}
+          className="min-h-16 w-full resize-y border-0 bg-transparent p-0 leading-7 outline-none read-only:resize-none"
+        />
+        {editState.status !== "idle" ? <p role={editState.status === "error" ? "alert" : "status"} className={`mt-2 text-sm font-bold ${editState.status === "error" ? "text-rose-800" : "text-[var(--accent-strong)]"}`}>{editState.message}</p> : null}
+        {item.canEdit || item.canDelete ? <div className="mt-2 flex justify-end gap-2">
+          {item.canEdit ? <button type="submit" className="min-h-9 rounded-lg bg-[var(--accent)] px-4 text-sm font-bold text-white hover:bg-[var(--accent-strong)]">저장</button> : null}
+          {item.canDelete ? <button type="submit" form={`delete-feedback-${item.id}`} className="min-h-9 rounded-lg border border-rose-200 px-4 text-sm font-bold text-rose-800 hover:bg-rose-50">삭제</button> : null}
+        </div> : null}
+      </form>
+      {item.canDelete ? <form id={`delete-feedback-${item.id}`} action={deleteAction} onSubmit={(event) => { if (!window.confirm("이 피드백을 삭제하시겠습니까? 삭제 후 7일 동안 복구 유예 상태로 보관됩니다.")) event.preventDefault(); }} /> : null}
+      {deleteState.status === "error" ? <p role="alert" className="mt-2 text-sm font-bold text-rose-800">{deleteState.message}</p> : null}
+    </div>
+  </article>;
+}
+
 export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedReason, isOwner, onClosed }: {
   lessonId: string;
   data: StudentFeedbackModalData;
@@ -53,18 +116,19 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [body, setBody] = useState("");
   const [createdItems, setCreatedItems] = useState<StudentFeedbackModalItem[]>([]);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(() => new Set());
   const [state, formAction] = useActionState(async (previousState: FeedbackModalActionState, formData: FormData) => {
     const result = await createModalFeedback(lessonId, data.studentId, previousState, formData);
     if (result.status === "success" && result.feedback) {
       setBody("");
       if (textareaRef.current) textareaRef.current.style.height = "auto";
-      setCreatedItems((current) => [result.feedback!, ...current.filter((item) => item.id !== result.feedback!.id)]);
+      setCreatedItems((current) => [{ ...result.feedback!, canEdit: true, canDelete: isOwner }, ...current.filter((item) => item.id !== result.feedback!.id)]);
     }
     return result;
   }, INITIAL_STATE);
   const itemMap = new Map(data.items.map((item) => [item.id, item]));
   createdItems.forEach((item) => itemMap.set(item.id, item));
-  const items = [...itemMap.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+  const items = [...itemMap.values()].filter((item) => !deletedIds.has(item.id)).sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -133,20 +197,7 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
 
         <section className="mt-8 border-t border-[var(--line)] pt-7" aria-labelledby="existing-modal-feedback-heading">
           <h3 id="existing-modal-feedback-heading" className="text-lg font-bold">기존 피드백</h3>
-          {items.length ? <div className="mt-5 space-y-7">{items.map((item) => (
-            <article key={item.id}>
-              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <p className="flex flex-wrap items-center gap-1.5 text-[var(--muted)]">
-                  <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
-                  <span aria-hidden="true">·</span>
-                  <span>{item.authorName}</span>
-                  {item.commentCount > 0 ? <><span aria-hidden="true">·</span><span className="rounded-full bg-[#e5f2f0] px-2.5 py-1 text-xs font-bold text-[var(--accent-strong)]">댓글 {item.commentCount}</span></> : null}
-                </p>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.publishedAt ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{item.publishedAt ? "게시됨" : "미게시"}</span>
-              </div>
-              <p className="mt-3 whitespace-pre-wrap break-words leading-7">{item.body}</p>
-            </article>
-          ))}</div> : <p className="mt-4 text-[var(--muted)]">아직 작성된 피드백이 없습니다.</p>}
+          {items.length ? <div className="mt-5 space-y-5">{items.map((item) => <ExistingFeedbackEditor key={item.id} studentId={data.studentId} item={item} onDeleted={(feedbackId) => setDeletedIds((current) => new Set(current).add(feedbackId))} />)}</div> : <p className="mt-4 text-[var(--muted)]">아직 작성된 피드백이 없습니다.</p>}
         </section>
       </article>
     </dialog>
