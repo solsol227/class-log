@@ -36,11 +36,13 @@ node scripts/test-operator-ux-db.mjs
 ~~~
 
 메모리 PostgreSQL만 사용하며 환경변수·원격 DB·실제 사용자 데이터를 읽지 않는다.
-최소 Supabase Auth/role 플랫폼 구성을 bootstrap하고 저장소의 33개 migration을
-순서대로 실행한다. 기존 migration 내 데이터 기반 검증에는 합성 학생/이용권을 사용한다.
-50개 assertion으로 신규 분류 필수, 기존 NULL 수정, 다른 이용권 배정, quota/충돌,
+최소 Supabase Auth/role 플랫폼 구성을 bootstrap하고 저장소의 35개 migration을
+순서대로 실행한다. 기존 migration 내 데이터 기반 검증에는 합성 owner/staff/학생/이용권을 사용한다.
+103개 assertion으로 신규 분류 필수, 기존 NULL 수정, 다른 이용권 배정, quota/충돌,
 보강 연결 불변, Draft 삭제 보호, 확정 취소, 저장 영역 분리, 프로그램 transaction/이력,
-PR26 수동 완료·복구 이력·자동 완료 복구 차단, 학생 RLS와 RPC 권한을 검증한다. Supabase Auth 서비스, PostgREST schema cache,
+PR26 수동 완료·복구 이력·자동 완료 복구 차단, 기록 없는 일정의 상태별 hard delete,
+active·soft 배정과 담당자 제거, 출결 동반 삭제, 취소 보강·event 정리, 피드백/활성 보강 차단 사유, 예약·사용 횟수 반환, rollback, Draft 빠른 확정,
+owner 허용과 staff 조회·mutation 차단, 학생/anon RLS와 RPC 권한을 검증한다. Supabase Auth 서비스, PostgREST schema cache,
 브라우저 입력·레이아웃과 두 세션 경합은 이 테스트에 포함되지 않는다.
 
 supabase/tests/operator_ux_preflight.sql은 별도의 읽기 전용 원격 점검 SQL이며

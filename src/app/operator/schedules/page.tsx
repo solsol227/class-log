@@ -6,8 +6,15 @@ import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { getLessonDisplayStatus, getLessonDisplayStatusLabel, type LessonDisplayStatus } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { QuickConfirmDraftForm } from "./[lessonId]/schedule-management-forms";
 
-function formatDateTime(value: string) { return new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Seoul" }).format(new Date(value)); }
+function formatScheduleDateRange(startsAt: string, endsAt: string) {
+  const dateParts = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Seoul" }).formatToParts(new Date(startsAt));
+  const datePart = (type: Intl.DateTimeFormatPartTypes) => dateParts.find((part) => part.type === type)?.value ?? "";
+  const date = `${datePart("year")}.${datePart("month")}.${datePart("day")}`;
+  const timeFormatter = new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Seoul" });
+  return `${date} ${timeFormatter.format(new Date(startsAt))} - ${timeFormatter.format(new Date(endsAt))}`;
+}
 
 const STATUS_FILTERS: { value: "all" | LessonDisplayStatus; label: string }[] = [
   { value: "all", label: "전체" },
@@ -61,6 +68,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
   const access = await requireOperatorAccess();
   const resolvedSearchParams = await searchParams;
   const deleted = typeof resolvedSearchParams.deleted === "string" ? resolvedSearchParams.deleted : undefined;
+  const confirmed = typeof resolvedSearchParams.confirmed === "string" ? resolvedSearchParams.confirmed : undefined;
   const activeStatuses = [...new Set(getQueryValues(resolvedSearchParams.status).filter(
     (value): value is LessonDisplayStatus => STATUS_FILTERS.some((filter) => filter.value === value && value !== "all"),
   ))];
@@ -111,6 +119,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
   if (month) normalizedSearchParams.month = month;
   if (activeStaffId) normalizedSearchParams.staff = activeStaffId;
   if (requestedSort === "asc" || activeSort === "desc") normalizedSearchParams.sort = activeSort;
+  const confirmReturnPath = scheduleListHref(normalizedSearchParams, { confirmed: "1", deleted: null });
 
   const staffNameById = new Map(staffProfiles.map((member) => [member.id, member.display_name]));
   const studentNameById = new Map(students.map((student) => [student.id, student.nickname]));
@@ -170,7 +179,8 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
 
   return (
     <main className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14">
-      {deleted === "1" ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">일정을 삭제했습니다.</p> : null}
+      {deleted === "1" ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">일정을 완전히 삭제했습니다.</p> : null}
+      {confirmed === "1" ? <p role="status" className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-900">일정을 확정했습니다.</p> : null}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-[-0.04em] sm:text-4xl">일정관리</h1>
         {access.canManageSchedules ? <Link href="/operator/schedules/new" className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]">새 일정 등록</Link> : null}
@@ -250,7 +260,30 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
         <ul className="mt-8 space-y-3">{filteredLessons.map((lesson) => {
           const assignedStaffNames = staffNamesByLesson.get(lesson.id) ?? [];
           const assignedStudentNames = studentNamesByLesson.get(lesson.id) ?? [];
-          return <li key={lesson.id}><Link href={`/operator/schedules/${lesson.id}`} className="block rounded-2xl border border-[var(--line)] bg-white p-5 transition hover:border-[var(--accent)]"><span className="flex flex-wrap items-center justify-between gap-3"><span className="min-w-0 break-words text-lg font-bold">{lesson.title}</span><ScheduleCategoryBadge category={lesson.schedule_category} /><span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(lesson.status, lesson.ends_at, requestTime)}</span></span><span className="mt-3 block text-sm text-[var(--muted)]">{formatDateTime(lesson.starts_at)} - {formatDateTime(lesson.ends_at)}</span><span className="mt-3 block break-words text-sm text-[var(--muted)]"><span className="font-bold text-[var(--foreground)]">담당자:</span> {assignedStaffNames.length > 0 ? assignedStaffNames.join(", ") : "미배정"}</span><span className="mt-2 block break-words text-sm text-[var(--muted)]"><span className="font-bold text-[var(--foreground)]">배정학생:</span> {assignedStudentLabel(assignedStudentNames)}</span></Link></li>;
+          const canQuickConfirm = access.canConfirmDrafts && lesson.status === "draft";
+          const badges = <><ScheduleCategoryBadge category={lesson.schedule_category} /><span className="rounded-full bg-[#e5f2f0] px-3 py-1 text-sm font-bold text-[var(--accent-strong)]">{getLessonDisplayStatusLabel(lesson.status, lesson.ends_at, requestTime)}</span></>;
+          return (
+            <li key={lesson.id} className="rounded-2xl border border-[var(--line)] bg-white transition hover:border-[var(--accent)]">
+              <div className="grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <Link href={`/operator/schedules/${lesson.id}`} className="min-w-0 p-5 focus-visible:rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
+                  <span className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="min-w-0 break-words text-lg font-bold">{lesson.title}</span>
+                    <span className="flex flex-wrap items-center gap-2 sm:hidden">{badges}</span>
+                  </span>
+                  <span className="mt-3 block text-sm text-[var(--muted)]">{formatScheduleDateRange(lesson.starts_at, lesson.ends_at)}</span>
+                  <span className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 break-words text-sm text-[var(--muted)]">
+                    <span><span className="font-bold text-[var(--foreground)]">담당자:</span> {assignedStaffNames.length > 0 ? assignedStaffNames.join(", ") : "미배정"}</span>
+                    <span aria-hidden="true" className="text-[var(--line)]">|</span>
+                    <span><span className="font-bold text-[var(--foreground)]">배정 학생:</span> {assignedStudentLabel(assignedStudentNames)}</span>
+                  </span>
+                </Link>
+                <div className={`${canQuickConfirm ? "flex border-t border-[var(--line)] sm:border-t-0" : "hidden"} flex-col items-stretch gap-5 p-5 pt-4 sm:flex sm:min-w-44 sm:items-end sm:self-stretch sm:pt-5`}>
+                  <span className="hidden flex-wrap items-center justify-end gap-2 sm:flex">{badges}</span>
+                  {canQuickConfirm ? <div className="mt-auto w-full sm:text-right"><QuickConfirmDraftForm lessonId={lesson.id} returnPath={confirmReturnPath} /></div> : null}
+                </div>
+              </div>
+            </li>
+          );
         })}</ul>
       )}
     </main>

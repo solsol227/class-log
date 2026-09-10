@@ -52,7 +52,7 @@ export function ScheduleDashboard({ lesson, assignedStudents, studentOptions, at
           {canManageSchedules && canEdit && !editing ? <button type="button" onClick={() => setEditing(true)} className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] transition hover:bg-[#e5f2f0] active:translate-y-px">수정</button> : null}
           {canManageSchedules && canEdit && editing ? <button type="submit" form={editFormId} className="min-h-11 rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)] active:translate-y-px">저장</button> : null}
           {canManageSchedules && canEdit && lesson.status !== "draft" && !editing ? <CancelScheduleForm lessonId={lesson.id} /> : null}
-          {canManageSchedules ? <DeleteScheduleForm lessonId={lesson.id} /> : null}
+          {canManageSchedules ? <DeleteScheduleForm lessonId={lesson.id} lessonTitle={lesson.title} /> : null}
         </div>
       </div>
 

@@ -6,6 +6,24 @@
 
 ---
 
+## 2026-09-09 — 제한된 연결 기록만 함께 정리하는 일정 hard delete
+
+### 결정
+
+피드백·댓글이나 취소되지 않은 보강 관계가 없는 lesson은 보호된 RPC에서 실제 삭제한다. 출결은 lesson과 함께 삭제한다. 대상 lesson과 관련 보강이 모두 취소 상태이면 보강 event와 보강 row도 같은 transaction에서 정리한다. 그 외 보강 상태와 피드백·댓글은 구체적인 사유로 삭제를 차단한다. 이용권 adjustment나 환불 ledger는 만들지 않고 assignment 기반 집계에서 자연스럽게 반환한다.
+
+직접 table DELETE는 계속 trigger로 막는다. RPC 내부의 assignment·출결·취소 보강 삭제 예외는 클라이언트 GUC가 아니라 정확한 lesson과 makeup ID를 담은 private transaction capability로만 식별한다.
+
+### 권한 경계
+
+PR30에서 도입한 owner/staff 구분을 그대로 따른다. 삭제와 Draft 확정은 DB `private.is_owner()`와 서버 `requireOperatorAccess({ owner: true })`를 공통 경계로 사용한다. staff에게는 일정 조회만 허용하고 삭제·확정 mutation은 owner만 실행할 수 있으며 student와 anon은 모두 차단한다.
+
+### 이유
+
+피드백·댓글과 진행·완료된 보강의 의미 있는 운영 이력은 보존하면서, 일정과 함께 폐기하기로 한 출결 및 이미 취소된 보강 흔적은 사용자의 명시적 확인 아래 함께 정리하기 위해서다. Scheduled/Completed assignment가 사용하던 예약·사용 횟수도 별도 보정 이력 없이 정확히 되돌린다.
+
+---
+
 ## 2026-09-08 — PR26 보강 완료 경로는 상태 분류가 아니다
 
 ### 결정

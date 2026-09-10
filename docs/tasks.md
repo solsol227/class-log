@@ -8,6 +8,26 @@
 - 중립 lesson·이용권, deadlock·인증 장애 처리, 단일 학생 배정 보존·Draft 집계 비노출 검증 완료
 - 실제 merge 상태와 최종 commit은 Git/PR 이력을 기준으로 확인한다.
 
+## 구현·검증 완료 — 일정 hard delete 및 Draft 목록 빠른 확정
+
+- [x] 최신 main 기준 별도 worktree와 append-only migration
+- [x] 피드백·활성 보강을 보호하는 원자적 hard delete RPC
+- [x] active/soft-unassigned assignment, lesson staff와 출결 함께 삭제
+- [x] 취소 lesson에 연결된 취소 보강·event 함께 삭제
+- [x] 피드백/댓글·보강별 구체적 삭제 차단 사유
+- [x] assignment 집계 기반 예약·사용 횟수 반환
+- [x] 삭제 dialog와 목록 Draft 빠른 확정 카드 UI
+- [x] 삭제·확정 권한 경계를 서버/DB 공통 owner 검사로 분리
+- [x] PR30 owner/staff 작업 병합 후 최신 main 반영
+- [x] 임시 operator 경계를 정식 owner 검사로 교체
+- [x] owner 삭제·확정 허용, staff 조회 허용·삭제/확정 차단 최종 검증
+- [x] student/anon 삭제·확정 차단 최종 검증
+- [x] append-only migration 원격 적용 및 local/remote 35개 일치
+- [x] 존재하지 않는 UUID로 owner/staff/student/anon 원격 권한 smoke test
+- [x] 최종 staged diff 확인 전 전체 검증
+
+PR30의 `operator_accounts`를 권한 source of truth로 사용한다. owner만 일정 삭제와 Draft 확정을 수행하며 staff는 일정 조회만 가능하다.
+
 ## 완료 — PR #15 보안 hardening
 
 - [x] security-definer helper 권한 정리
@@ -227,4 +247,4 @@
 - [x] 합성 in-memory DB와 Auth 경계 회귀 테스트
 - [x] PR30 migration 원격 적용 및 DB lint
 - [x] 실제 staff 계정 생성·로그인·중지 브라우저 확인 (사용자가 직접 수행)
-- [ ] 후속 일정 hard delete·Draft 빠른 확정에서 owner capability 연결
+- [x] 후속 일정 hard delete·Draft 빠른 확정에서 owner capability 연결
