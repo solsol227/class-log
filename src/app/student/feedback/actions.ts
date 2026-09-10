@@ -24,7 +24,6 @@ export async function addStudentComment(feedbackId: string, lessonId: string, fo
     .select("id")
     .eq("id", feedbackId)
     .eq("lesson_id", lessonId)
-    .not("published_at", "is", null)
     .is("deleted_at", null)
     .maybeSingle();
   if (feedbackError || !feedback) redirect(feedbackDetailPath(lessonId, feedbackId, true));

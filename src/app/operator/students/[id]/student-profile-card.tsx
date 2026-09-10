@@ -1,48 +1,29 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useState } from "react";
 import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
-import { deleteStudent, updateStudentProfile, updateStudentPrograms, type DeleteStudentActionState, type StudentProfileActionState } from "./actions";
+import { deleteStudent, updateStudentProfile, type DeleteStudentActionState, type StudentProfileActionState } from "./actions";
 
 type StudentProfile = { id: string; name: string; gender: string | null; age: number | null; phone: string | null; acquisitionSource: string | null; joinedMonth: string | null; specialNotes: string | null };
-type StudentProgram = { id: string; programType: string; storedStatus: string; effectiveStatus: string; startedAt: string; endedAt: string | null; stopReason: string | null; baseAllowanceCount: number | null };
 const PROFILE_INITIAL_STATE: StudentProfileActionState = { fieldErrors: {} };
 const DELETE_INITIAL_STATE: DeleteStudentActionState = {};
-const PROGRAM_TYPES = ["weekday_vocal", "weekend_vocal", "rental", "trial"] as const;
-const PROGRAM_LABELS: Record<string, string> = { weekday_vocal: "평일보컬", weekend_vocal: "주말보컬", rental: "대여", trial: "체험" };
-const STATUS_LABELS: Record<string, string> = { active: "이용 중", inactive: "장기 미배정", stopped: "중단" };
-const STOP_REASON_LABELS: Record<string, string> = { break: "잠시 쉼", ended: "이용 종료", other: "기타" };
 
-function formatPhone(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
-}
+function formatPhone(value: string) { const digits = value.replace(/\D/g, "").slice(0, 11); if (digits.length <= 3) return digits; if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`; return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`; }
 function formatJoinedMonth(value: string | null) { if (!value) return "-"; const [year, month] = value.split("-"); return `${year.slice(2)}년 ${month}월`; }
-function todayInKorea() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date()); }
 function SaveButton() { const { pending } = useFormStatus(); return <button type="submit" disabled={pending} className="min-h-10 rounded-xl bg-[var(--accent)] px-4 font-bold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-wait disabled:opacity-70">{pending ? "저장 중" : "저장"}</button>; }
 function DeleteButton() { const { pending } = useFormStatus(); return <button type="submit" disabled={pending} className="min-h-10 rounded-xl border border-rose-300 px-4 font-bold text-rose-800 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-70">{pending ? "삭제 중" : "삭제"}</button>; }
 
-export function StudentProfileCard({ student, programs, canManage }: { student: StudentProfile; programs: StudentProgram[]; canManage: boolean }) {
+export function StudentProfileCard({ student, canManage }: { student: StudentProfile; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
-  const [editingPrograms, setEditingPrograms] = useState(false);
-  const [profileNotice, setProfileNotice] = useState("");
-  const [programNotice, setProgramNotice] = useState("");
+  const [notice, setNotice] = useState("");
   const [deleteState, deleteAction] = useActionState(deleteStudent.bind(null, student.id), DELETE_INITIAL_STATE);
-  const profileActions = canManage ? <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => { setEditing(true); setProfileNotice(""); }} className="min-h-10 rounded-xl border border-[var(--line)] px-4 font-bold transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]">수정</button><form action={deleteAction} onSubmit={(event) => { if (!window.confirm("이 학생을 삭제하시겠습니까? 학생 계정과 배정된 일정 및 관련 데이터가 함께 삭제될 수 있습니다.")) event.preventDefault(); }}><DeleteButton /></form></div> : null;
-  return <div className="space-y-6">
-    <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8">
-      {profileNotice ? <p role="status" className="mb-4 text-sm font-bold text-[var(--accent-strong)]">{profileNotice}</p> : null}
-      {deleteState.formError ? <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{deleteState.formError}</p> : null}
-      {editing && canManage ? <StudentEditForm student={student} onCancel={() => { setEditing(false); setProfileNotice("학생 기본정보 편집을 취소했습니다."); }} onSaved={() => { setEditing(false); setProfileNotice("학생 기본정보를 저장했습니다."); }} /> : <StudentProfileView student={student} actions={profileActions} />}
-    </section>
-    <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_18px_50px_rgba(23,64,60,0.06)] sm:p-8">
-      {programNotice ? <p role="status" className="mb-4 text-sm font-bold text-[var(--accent-strong)]">{programNotice}</p> : null}
-      {editingPrograms && canManage ? <StudentProgramsForm studentId={student.id} programs={programs} onCancel={() => { setEditingPrograms(false); setProgramNotice("이용프로그램 편집을 취소했습니다."); }} onSaved={() => { setEditingPrograms(false); setProgramNotice("이용프로그램을 저장했습니다."); }} /> : <><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">이용프로그램</h2>{canManage ? <button type="button" onClick={() => { setEditingPrograms(true); setProgramNotice(""); }} className="min-h-10 rounded-xl border border-[var(--line)] px-4 font-bold transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]">수정</button> : null}</div><ProgramHistory programs={programs} /></>}
-    </section>
-  </div>;
+  const actions = canManage ? <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => { setEditing(true); setNotice(""); }} className="min-h-10 rounded-xl border border-[var(--line)] px-4 font-bold transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]">수정</button><form action={deleteAction} onSubmit={(event) => { if (!window.confirm("이 학생을 삭제하시겠습니까? 학생 계정과 배정된 일정 및 관련 데이터가 함께 삭제될 수 있습니다.")) event.preventDefault(); }}><DeleteButton /></form></div> : null;
+  return <section className="rounded-2xl border border-[var(--line)] bg-white p-6 shadow-[0_24px_70px_rgba(23,64,60,0.09)] sm:p-8">
+    {notice ? <p role="status" className="mb-4 text-sm font-bold text-[var(--accent-strong)]">{notice}</p> : null}
+    {deleteState.formError ? <p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{deleteState.formError}</p> : null}
+    {editing && canManage ? <StudentEditForm student={student} onCancel={() => { setEditing(false); setNotice("학생 기본정보 편집을 취소했습니다."); }} onSaved={() => { setEditing(false); setNotice("학생 기본정보를 저장했습니다."); }} /> : <StudentProfileView student={student} actions={actions} />}
+  </section>;
 }
 
 function StudentProfileView({ student, actions }: { student: StudentProfile; actions: ReactNode }) {
@@ -51,16 +32,12 @@ function StudentProfileView({ student, actions }: { student: StudentProfile; act
 }
 
 function StudentEditForm({ student, onCancel, onSaved }: { student: StudentProfile; onCancel: () => void; onSaved: () => void }) {
-  const [state, action] = useActionState(async (previous: StudentProfileActionState, data: FormData) => {
-    const result = await updateStudentProfile(student.id, previous, data);
-    if (result.success) onSaved();
-    return result;
-  }, PROFILE_INITIAL_STATE);
+  const [state, action] = useActionState(async (previous: StudentProfileActionState, data: FormData) => { const result = await updateStudentProfile(student.id, previous, data); if (result.success) onSaved(); return result; }, PROFILE_INITIAL_STATE);
   const [dirty, setDirty] = useState(false);
   const [phone, setPhone] = useState(formatPhone(student.phone ?? ""));
   const [joinedMonth, setJoinedMonth] = useState(student.joinedMonth?.slice(0, 7) ?? "");
   return <form action={action} onChange={() => setDirty(true)} className="space-y-8" noValidate>
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">학생 기본정보 편집</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">{student.name}</h1></div><div className="flex gap-2"><CancelEditButton onCancel={onCancel} /><SaveButton /></div></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">학생 기본정보 편집</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">{student.name}</h1></div><div className="flex gap-2"><CancelButton onCancel={onCancel} /><SaveButton /></div></div>
     {state.formError ? <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{state.formError}</p> : null}
     <p role="status" className="text-sm text-[var(--muted)]">{dirty ? "학생 기본정보에 미저장 변경이 있습니다." : "학생 기본정보만 저장·취소합니다."}</p>
     <div className="grid gap-5 sm:grid-cols-2">
@@ -75,52 +52,6 @@ function StudentEditForm({ student, onCancel, onSaved }: { student: StudentProfi
   </form>;
 }
 
-function CancelEditButton({ onCancel }: { onCancel: () => void }) {
-  const { pending } = useFormStatus();
-  return <button type="button" disabled={pending} onClick={onCancel} className="min-h-10 rounded-xl border border-[var(--line)] px-4 font-bold disabled:opacity-60">취소</button>;
-}
-
-function StudentProgramsForm({ studentId, programs, onCancel, onSaved }: { studentId: string; programs: StudentProgram[]; onCancel: () => void; onSaved: () => void }) {
-  // Keep this editing session stable when the profile section revalidates the page.
-  const [initialPrograms] = useState(programs);
-  const [state, action] = useActionState(async (previous: StudentProfileActionState, data: FormData) => {
-    const result = await updateStudentPrograms(studentId, previous, data);
-    if (result.success) onSaved();
-    return result;
-  }, PROFILE_INITIAL_STATE);
-  return <form action={action} className="space-y-5" noValidate>
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">이용프로그램 편집</h2><div className="flex gap-2"><CancelEditButton onCancel={onCancel} /><SaveButton /></div></div>
-    <p className="text-sm text-[var(--muted)]">이 영역의 프로그램 변경만 함께 저장·취소합니다.</p>
-    {state.formError ? <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm font-bold text-rose-900">{state.formError}</p> : null}
-    <ProgramEditor programs={initialPrograms} error={state.fieldErrors.programs} />
-  </form>;
-}
-
-function ProgramEditor({ programs, error }: { programs: StudentProgram[]; error?: string }) {
-  const today = useMemo(() => todayInKorea(), []);
-  const activePrograms = programs.filter((program) => program.storedStatus === "active");
-  const stoppedPrograms = programs.filter((program) => program.storedStatus === "stopped");
-  const activeTypes = new Set(activePrograms.map((program) => program.programType));
-  const stoppedTypes = new Set(stoppedPrograms.map((program) => program.programType));
-  const availableTypes = PROGRAM_TYPES.filter((type) => !activeTypes.has(type));
-  const [stopDrafts, setStopDrafts] = useState<Record<string, { selected: boolean; endedAt: string; stopReason: string }>>(() => Object.fromEntries(activePrograms.map((program) => [program.id, { selected: false, endedAt: today, stopReason: "" }])));
-  const [historyReasons, setHistoryReasons] = useState<Record<string, string>>(() => Object.fromEntries(stoppedPrograms.map((program) => [program.id, program.stopReason ?? ""])));
-  const [startDrafts, setStartDrafts] = useState<Record<string, { selected: boolean; startedAt: string; baseAllowanceCount: string }>>(() => Object.fromEntries(availableTypes.map((type) => [type, { selected: false, startedAt: today, baseAllowanceCount: "" }])));
-  const changes = {
-    stop: activePrograms.flatMap((program) => stopDrafts[program.id]?.selected ? [{ id: program.id, endedAt: stopDrafts[program.id].endedAt, stopReason: stopDrafts[program.id].stopReason || null }] : []),
-    start: availableTypes.flatMap((programType) => startDrafts[programType]?.selected ? [{ programType, startedAt: startDrafts[programType].startedAt, ...(programType === "rental" ? { baseAllowanceCount: Number(startDrafts[programType].baseAllowanceCount) } : {}) }] : []),
-    reasonUpdates: stoppedPrograms.flatMap((program) => (historyReasons[program.id] ?? "") !== (program.stopReason ?? "") ? [{ id: program.id, stopReason: historyReasons[program.id] || null }] : []),
-  };
-  const changeCount = changes.stop.length + changes.start.length + changes.reasonUpdates.length;
-  return <section className="border-t border-[var(--line)] pt-7"><input type="hidden" name="program_changes" value={JSON.stringify(changes)} /><div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="text-xl font-bold">이용프로그램</h2><p className="text-sm text-[var(--muted)]">프로그램 변경은 모두 함께 저장됩니다.</p></div>{error ? <p className="mt-3 text-sm font-semibold text-rose-800">{error}</p> : null}
-    <div className="mt-5 space-y-4">{activePrograms.map((program) => { const draft = stopDrafts[program.id]; return <div key={program.id} className="rounded-xl border border-[var(--line)] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{PROGRAM_LABELS[program.programType]}</p><p className="mt-1 text-sm text-[var(--muted)]">{program.startedAt} 시작 · {STATUS_LABELS[program.effectiveStatus]}</p></div><label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-rose-200 px-3 text-sm font-bold text-rose-800"><input type="checkbox" checked={draft?.selected ?? false} onChange={(event) => setStopDrafts((current) => ({ ...current, [program.id]: { ...current[program.id], selected: event.target.checked } }))} />이용 중단</label></div>{draft?.selected ? <div className="mt-4 grid gap-3 rounded-lg bg-rose-50 p-3 sm:grid-cols-2"><label className="text-sm font-bold">중단일<input type="date" required value={draft.endedAt} min={program.startedAt} onChange={(event) => setStopDrafts((current) => ({ ...current, [program.id]: { ...current[program.id], endedAt: event.target.value } }))} className="mt-2 h-11 w-full rounded-lg border bg-white px-3 font-normal" /></label><label className="text-sm font-bold">중단 사유<select value={draft.stopReason} onChange={(event) => setStopDrafts((current) => ({ ...current, [program.id]: { ...current[program.id], stopReason: event.target.value } }))} className="mt-2 h-11 w-full rounded-lg border bg-white px-3 font-normal"><StopReasonOptions /></select></label><p className="text-xs text-rose-900 sm:col-span-2">미래 일정 배정이 남아 있으면 저장되지 않으며 모든 변경이 함께 취소됩니다.</p></div> : null}</div>; })}
-      {stoppedPrograms.length ? <div className="rounded-xl bg-[#f4f8f7] p-4"><h3 className="font-bold">중단 이력</h3><ul className="mt-3 space-y-3">{stoppedPrograms.map((program) => <li key={program.id} className="grid gap-2 border-t border-[var(--line)] pt-3 first:border-0 first:pt-0 sm:grid-cols-[1fr_12rem] sm:items-center"><div><p className="font-bold">{PROGRAM_LABELS[program.programType]}</p><p className="mt-1 text-sm text-[var(--muted)]">{program.startedAt} ~ {program.endedAt ?? "-"}</p></div><label className="text-sm font-bold">중단 사유<select value={historyReasons[program.id] ?? ""} onChange={(event) => setHistoryReasons((current) => ({ ...current, [program.id]: event.target.value }))} className="mt-1 h-10 w-full rounded-lg border bg-white px-2 font-normal"><StopReasonOptions /></select></label></li>)}</ul></div> : null}
-      {availableTypes.length ? <div className="rounded-xl border border-dashed border-[#9badaa] p-4"><h3 className="font-bold">이용 시작·재개</h3><p className="mt-1 text-sm text-[var(--muted)]">재개하면 과거 이력은 그대로 두고 새 이용기간을 만듭니다.</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{availableTypes.map((programType) => { const draft = startDrafts[programType]; const verb = stoppedTypes.has(programType) ? "이용 재개" : "이용 시작"; return <div key={programType} className="rounded-lg bg-[#f4f8f7] p-3"><label className="flex cursor-pointer items-center gap-2 font-bold"><input type="checkbox" checked={draft?.selected ?? false} onChange={(event) => setStartDrafts((current) => ({ ...current, [programType]: { ...current[programType], selected: event.target.checked } }))} />{PROGRAM_LABELS[programType]} {verb}</label>{draft?.selected ? <><label className="mt-3 block text-sm font-bold">시작일<input type="date" required value={draft.startedAt} onChange={(event) => setStartDrafts((current) => ({ ...current, [programType]: { ...current[programType], startedAt: event.target.value } }))} className="mt-1 h-10 w-full rounded-lg border bg-white px-2 font-normal" /></label>{programType === "rental" ? <label className="mt-3 block text-sm font-bold">총 제공 횟수<input type="number" min="1" required value={draft.baseAllowanceCount} onChange={(event) => setStartDrafts((current) => ({ ...current, [programType]: { ...current[programType], baseAllowanceCount: event.target.value } }))} className="mt-1 h-10 w-full rounded-lg border bg-white px-2 font-normal" /></label> : null}</> : null}</div>; })}</div></div> : null}
-    </div>{changeCount ? <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">미저장 프로그램 변경 {changeCount}건</p> : <p className="mt-4 text-sm text-[var(--muted)]">프로그램 변경 없음</p>}
-  </section>;
-}
-
-function ProgramHistory({ programs }: { programs: StudentProgram[] }) { return <section>{programs.length ? <ul className="mt-4 space-y-3">{programs.map((program) => <li key={program.id} className="rounded-xl border border-[var(--line)] p-4"><div className="flex flex-wrap justify-between gap-3"><p className="font-bold">{PROGRAM_LABELS[program.programType] ?? program.programType}</p><span className="text-sm font-bold text-[var(--accent-strong)]">{STATUS_LABELS[program.effectiveStatus] ?? program.effectiveStatus}</span></div><p className="mt-1 text-sm text-[var(--muted)]">{program.startedAt}{program.endedAt ? ` ~ ${program.endedAt}` : " 시작"}</p><p className="mt-1 text-sm text-[var(--muted)]">기본 제공 {program.baseAllowanceCount ?? "미설정"}회</p>{program.storedStatus === "stopped" ? <p className="mt-2 text-sm">중단 사유: {program.stopReason ? STOP_REASON_LABELS[program.stopReason] : "사유 없음"}</p> : null}</li>)}</ul> : <p className="mt-4 text-sm text-[var(--muted)]">등록된 이용프로그램이 없습니다.</p>}</section>; }
-function StopReasonOptions() { return <><option value="">사유 없음</option><option value="break">잠시 쉼</option><option value="ended">이용 종료</option><option value="other">기타</option></>; }
+function CancelButton({ onCancel }: { onCancel: () => void }) { const { pending } = useFormStatus(); return <button type="button" disabled={pending} onClick={onCancel} className="min-h-10 rounded-xl border border-[var(--line)] px-4 font-bold disabled:opacity-60">취소</button>; }
 function ProfileInput({ id, label, name, defaultValue, error, type = "text" }: { id: string; label: string; name: string; defaultValue: string; error?: string; type?: string }) { return <div><label htmlFor={id} className="mb-2 block text-sm font-bold">{label}</label><input id={id} name={name} type={type} min={type === "number" ? 1 : undefined} max={type === "number" ? 119 : undefined} defaultValue={defaultValue} aria-invalid={Boolean(error)} className="h-12 w-full rounded-xl border border-[#9badaa] bg-white px-4 aria-invalid:border-rose-600" />{error ? <p className="mt-2 text-sm font-semibold text-rose-800">{error}</p> : null}</div>; }
 function ProfileValue({ label, value }: { label: string; value: string }) { return <div><dt className="text-sm font-bold text-[var(--muted)]">{label}</dt><dd className="mt-1 text-lg">{value}</dd></div>; }

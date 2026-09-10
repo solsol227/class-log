@@ -1,5 +1,16 @@
 # Class Log 개발 기록
 
+## 2026-09-11 — Codex — PR33 학생 상세 UX와 피드백 단일 상태
+
+- 기준: 최신 `origin/main` `1e07d7f34a7dfe65f46c2d102ee55d28c68a3a14`에서 `feat/student-detail-ux`를 생성했다. PR31·PR32 병합을 확인했으며 기존 migration은 수정하지 않았다.
+- 데이터: 적용 직전 피드백 9건 중 정상 5건, 삭제 표시 4건이었고 정상 미게시 0건·삭제 미게시 1건이었다. 댓글은 삭제 표시 1건이었다. 사용자 승인에 따라 삭제 표시 피드백 4건과 댓글 1건만 즉시 물리 삭제하고, 이후 `deleted_at` 7일 경과 row를 매시간 정리하는 private pg_cron 함수를 적용했다. 학생·일정·배정·출결·프로그램·중단 이력 개수는 적용 전후 동일하다.
+- 피드백: `published_at`과 게시 상태 query·필터·배지·문구를 제거했다. 학생 RLS는 본인 active assignment, 비-Draft 일정, 미삭제 피드백만 허용한다. 최근 4개 카드는 날짜와 오른쪽 상단 상세 버튼, 일정명, 한 줄 본문, 제공 직원·댓글 수로 단순화했다.
+- 일정 배정: 학생 상세 패널을 체크박스 다중 선택으로 바꾸고 한 batch에 하나의 이용권을 사용한다. owner 전용 `assign_student_to_lessons` RPC가 학생 잠금, 전체 lesson·enrollment·중복·보강 충돌과 기존 quota/시간 충돌 정책을 한 transaction에서 검증하므로 부분 성공이 없다. staff/student/anon은 차단한다.
+- 이용프로그램: 기본정보 편집과 별도 카드·action을 유지했다. 추가 후보를 compact 선택지로 정리하고, 남은 횟수·기본/조정·Draft·예약/사용·보강·조정 이력과 접이식 중단 form을 enrollment 카드 안으로 옮겼다. stopped enrollment와 과거 횟수·조정은 별도 이용 이력에 보존한다.
+- 사용자 확인 반영: 일정 상세 피드백 modal의 기존 피드백을 본문이 채워진 편집 상자로 바꾸고 상자 안에 저장·삭제 control을 배치했다. 수정은 기존 owner/담당 staff 작성·제공 권한을 따르고 삭제는 owner만 soft-delete한다. 학생 상세 이용프로그램의 읽기 상태는 프로그램·기간·상태·남은 횟수만 표시하고 상세 횟수·조정은 수정 진입 뒤에만 보인다. 단일 이용권 일정 배정 panel은 목록 높이와 하단 여백을 줄이고 선택 수·이용권 안내·배정 버튼을 한 줄에 배치했다.
+- 검증: batch RPC의 잠금 순서를 기존 일정 저장과 같은 lesson → student advisory lock으로 맞추는 append-only 교정 migration까지 적용해 local/remote 38개 migration이 일치한다. public/private DB lint는 기존 `delete_lesson_safely` 미사용 변수 경고 1건만 유지되고 cron lint는 깨끗하다. 합성 DB 38개 migration·116 assertions, ESLint, TypeScript, production build, diff check를 통과했다. 실제 owner/student 로그인, 역할 API와 보호 화면, 비인증 401 및 사용자 production 브라우저 확인을 완료했다.
+
+
 작업 세션이 끝날 때마다 최신 항목을 맨 위에 추가한다.
 
 목적은 다음 작업자나 다음 Codex 세션이 git log와 긴 대화를 처음부터 뒤지지 않고도 현재 상태를 이해하게 하는 것이다.

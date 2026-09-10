@@ -17,6 +17,10 @@ export type CommentDialogActionState = FeedbackDialogActionState & {
   deletedAt?: string;
 };
 
+export type FeedbackDeleteActionState = FeedbackDialogActionState & {
+  deletedId?: string;
+};
+
 const isUuid = (value: string) => UUID_PATTERN.test(value);
 
 function revalidateFeedbackPaths(lessonId: string, studentId: string) {
@@ -84,6 +88,35 @@ export async function updateFeedbackFromDialog(
 
   revalidateFeedbackPaths(feedback.lesson_id, studentId);
   return { status: "success", message: "피드백을 수정했습니다.", body: result.data.body, updatedAt: result.data.updated_at };
+}
+
+export async function deleteFeedbackFromDialog(
+  studentId: string,
+  feedbackId: string,
+  _previousState: FeedbackDeleteActionState,
+  _formData: FormData,
+): Promise<FeedbackDeleteActionState> {
+  void _previousState;
+  void _formData;
+  await requireOperatorAccess({ owner: true });
+
+  const supabase = await createSupabaseServerClient();
+  const feedback = await findFeedback(supabase, studentId, feedbackId);
+  if (!feedback) return { status: "error", message: "삭제할 피드백을 찾을 수 없습니다." };
+
+  const result = await supabase
+    .from("lesson_feedback")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", feedbackId)
+    .eq("lesson_id", feedback.lesson_id)
+    .eq("student_id", studentId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+  if (result.error || !result.data) return { status: "error", message: "피드백을 삭제하지 못했습니다." };
+
+  revalidateFeedbackPaths(feedback.lesson_id, studentId);
+  return { status: "success", message: "피드백을 삭제했습니다.", deletedId: result.data.id };
 }
 
 async function findOwnedComment(

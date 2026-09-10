@@ -33,11 +33,13 @@ try {
     create role service_role;
     create schema auth;
     create schema extensions;
+    create schema cron;
     create table auth.users(id uuid primary key, raw_app_meta_data jsonb, created_at timestamptz default now());
     create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt()->>'sub')::uuid $$;
     grant usage on schema auth to authenticated, anon;
     create function public.rls_auto_enable() returns event_trigger language plpgsql security definer set search_path = pg_catalog as $$ begin end; $$;
+    create function cron.schedule(text, text, text) returns bigint language sql as $$ select 1::bigint $$;
     alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
   `);
   for (const [id, role] of [[ids.operator, 'operator'], [ids.authA, 'student'], [ids.authB, 'student']]) {
@@ -66,7 +68,8 @@ try {
     }
     await db.exec(await readFile(new URL(file, migrationDir), 'utf8'));
   }
-  check(files.length === 35, 'all 35 append-only migrations loaded');
+  check(files.length === 38, 'all 38 append-only migrations loaded');
+  check(await scalar("select count(*)::int from information_schema.columns where table_schema='public' and table_name='lesson_feedback' and column_name='published_at'") === 0, 'feedback publication column removed');
   stage = 'staff operator account bootstrap';
   await claims('operator', ids.operator);
   await db.query('insert into auth.users(id, raw_app_meta_data) values ($1,$2),($3,$2)', [ids.staffAuth, JSON.stringify({ role: 'operator' }), ids.otherStaffAuth]);
@@ -119,6 +122,16 @@ try {
 
   stage = 'safe lesson hard delete';
   const rental = await scalar("select id from public.student_programs where student_id=$1 and program_type='rental' and status='active'", [ids.b]);
+  stage = 'atomic batch assignment';
+  const batchLessonA = await save(null, 'trial', [], 'batch A', 'draft', '2096-02-21');
+  const batchLessonB = await save(null, 'trial', [], 'batch B', 'draft', '2096-02-22');
+  const batchResult = await scalar('select public.assign_student_to_lessons($1::uuid[],$2,$3)', [[batchLessonA, batchLessonB], ids.b, rental]);
+  check(batchResult.length === 2, 'batch assignment returns every assigned lesson');
+  check(await scalar('select count(*)::int from public.lesson_assignments where lesson_id=any($1::uuid[]) and student_id=$2 and unassigned_at is null', [[batchLessonA, batchLessonB], ids.b]) === 2, 'batch assignment stores all selected lessons');
+  const rollbackLesson = await save(null, 'trial', [], 'batch rollback', 'draft', '2096-02-23');
+  await blocked(() => scalar('select public.assign_student_to_lessons($1::uuid[],$2,$3)', [[rollbackLesson, randomUUID()], ids.b, rental]), 'P0002', 'invalid batch rejects the whole request');
+  check(await scalar('select count(*)::int from public.lesson_assignments where lesson_id=$1 and student_id=$2 and unassigned_at is null', [rollbackLesson, ids.b]) === 0, 'failed batch leaves no partial assignment');
+  await blocked(() => scalar('select public.assign_student_to_lessons($1::uuid[],$2,$3)', [[rollbackLesson, rollbackLesson], ids.b, rental]), '22023', 'duplicate lesson ids are rejected');
   const staff = await scalar("insert into public.staff_profiles(display_name,role) values ('fixture staff','manager') returning id");
   const deletableDraft = await save(null, 'weekday', [monthly, rental], 'delete Draft', 'draft', '2096-03-01');
   await save(deletableDraft, 'weekday', [monthly], 'delete Draft', 'draft', '2096-03-01');
@@ -164,6 +177,14 @@ try {
   stage = 'safe lesson hard delete feedback reason';
   await blocked(() => scalar('select public.delete_lesson_safely($1)', [feedbackProtected]), 'P1001', 'feedback and comments return their specific hard-delete reason');
   check(await scalar('select count(*)::int from public.feedback_comments where feedback_id=$1', [feedback]) === 1, 'blocked feedback delete preserves comments');
+  stage = 'deleted feedback retention';
+  await db.exec('reset role');
+  await db.query("update public.lesson_feedback set deleted_at=now()-interval '8 days' where id=$1", [feedback]);
+  await db.query("update public.feedback_comments set deleted_at=now()-interval '8 days' where feedback_id=$1", [feedback]);
+  const purgeResult = await scalar("select private.purge_deleted_feedback(interval '7 days')");
+  check(purgeResult.feedbackDeleted === 1 && purgeResult.commentsDeleted === 1, 'seven-day cleanup purges deleted feedback and comments');
+  check(await scalar('select count(*)::int from public.lesson_feedback where id=$1', [feedback]) === 0, 'expired deleted feedback is physically removed');
+  await db.exec('set role authenticated');
   stage = 'safe lesson hard delete active original makeup reason';
   await blocked(() => scalar('select public.delete_lesson_safely($1)', [source]), 'P1002', 'active original makeup returns its specific hard-delete reason');
   stage = 'safe lesson hard delete active replacement makeup reason';
@@ -282,8 +303,10 @@ try {
   check(await scalar('select count(*)::int from public.students') === 2, 'active staff can read operational student data');
   check(await scalar('select count(*)::int from public.lessons') > 0, 'active staff can read schedules');
   await blocked(() => save(null, 'trial'), '42501', 'staff cannot create schedules');
+  await blocked(() => scalar('select public.assign_student_to_lessons($1::uuid[],$2,$3)', [[batchLessonA], ids.b, rental]), '42501', 'staff cannot batch assign schedules');
   await blocked(() => scalar('select public.delete_lesson_safely($1)', [lesson]), '42501', 'staff lesson hard delete denied');
   await blocked(() => scalar('select public.confirm_draft_lesson($1)', [legacy]), '42501', 'staff Draft quick confirm denied');
+  await blocked(() => scalar('select public.assign_student_to_lessons($1::uuid[],$2,$3)', [[rollbackLesson], ids.b, rental]), '42501', 'staff batch assignment denied');
   stage = 'assigned staff attendance';
   check(Boolean(await scalar("update public.attendance_records set status='absent' where lesson_id=$1 and student_id=$2 returning id", [source, ids.a])), 'assigned staff can update attendance');
   stage = 'assigned staff feedback';
@@ -307,8 +330,10 @@ try {
   await blocked(profileSave, ['42501', 'P0002'], 'student profile mutation denied');
   await blocked(() => programsSave({}), ['42501', 'P0002'], 'student programs mutation denied');
   await blocked(() => save(null, 'weekday'), ['42501', 'P0002'], 'student lesson mutation denied');
+  await blocked(() => scalar('select public.assign_student_to_lessons($1::uuid[],$2,$3)', [[batchLessonA], ids.b, rental]), '42501', 'student batch assignment denied');
   await blocked(() => scalar('select public.delete_lesson_safely($1)', [lesson]), ['42501', 'P0002'], 'student lesson hard delete denied');
   await blocked(() => scalar('select public.confirm_draft_lesson($1)', [legacy]), ['42501', 'P0002'], 'student Draft quick confirm denied');
+  await blocked(() => scalar('select public.assign_student_to_lessons($1::uuid[],$2,$3)', [[rollbackLesson], ids.b, rental]), ['42501', 'P0002'], 'student batch assignment denied');
   await blocked(() => scalar('select public.complete_makeup_without_schedule($1,null)', [manualMakeup]), ['42501', 'P0002'], 'student manual makeup completion denied');
   check(!await scalar("select has_function_privilege('anon','public.complete_makeup_without_schedule(uuid,text)','EXECUTE')"), 'anonymous manual completion RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.restore_manual_makeup_completion(uuid)','EXECUTE')"), 'anonymous manual restore RPC denied');
@@ -316,6 +341,7 @@ try {
   check(!await scalar("select has_function_privilege('anon','public.save_student_profile(uuid,text,text,integer,text,text,date,text)','EXECUTE')"), 'anonymous profile RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.delete_lesson_safely(uuid)','EXECUTE')"), 'anonymous lesson hard delete RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.confirm_draft_lesson(uuid)','EXECUTE')"), 'anonymous Draft confirmation RPC denied');
+  check(!await scalar("select has_function_privilege('anon','public.assign_student_to_lessons(uuid[],uuid,uuid)','EXECUTE')"), 'anonymous batch assignment RPC denied');
   check(!await scalar("select has_function_privilege('anon','private.is_owner()','EXECUTE')"), 'anonymous owner permission helper denied');
   console.log(`PASS: ${files.length} migrations and ${passed} local PostgreSQL assertions. Synthetic in-memory data only.`);
 } catch (error) {

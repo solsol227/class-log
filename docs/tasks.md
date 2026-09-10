@@ -8,12 +8,27 @@
 - 중립 lesson·이용권, deadlock·인증 장애 처리, 단일 학생 배정 보존·Draft 집계 비노출 검증 완료
 - 실제 merge 상태와 최종 commit은 Git/PR 이력을 기준으로 확인한다.
 
+## 구현·검증 중 — PR33 학생 상세 UX와 피드백 단일 상태
+
+- [x] 삭제 표시 피드백·댓글 현황과 게시 상태 의존성 사전 조사
+- [x] 기존 삭제 표시 피드백 4건·댓글 1건 물리 삭제, 이후 7일 보존 pg_cron 적용
+- [x] `published_at`과 게시 상태 query·배지·control 제거
+- [x] 학생 피드백 RLS를 본인 active assignment·비-Draft·미삭제 조건으로 재정의
+- [x] 학생 상세 최근 4개 피드백 카드 단순화
+- [x] 하나의 이용권을 사용하는 atomic 일정 일괄 배정 RPC와 다중 선택 UI
+- [x] 기존 일정 저장 RPC와 batch assignment의 lesson → student 잠금 순서 통일
+- [x] 학생정보·이용프로그램 편집 분리 유지
+- [x] 이용프로그램 카드에 이용 횟수·조정·이력·중단 UI 통합
+- [x] 원격 migration 적용, 데이터 전후 개수·권한·RLS·DB lint 검증
+- [x] production build와 실계정 로그인 smoke test
+- [x] 사용자 브라우저 확인
+
 ## 구현·검증 완료 — PR32 일정 상세 학생별 피드백 modal
 
 - [x] 최신 PR31/PR30 포함 main에서 기능 브랜치 생성
 - [x] roster의 새 탭 작성 링크를 학생별 modal trigger로 전환
 - [x] 일정 상세 하단 피드백 대시보드 제거
-- [x] 신규 피드백 즉시 게시 및 저장 후 modal 유지
+- [x] 신규 피드백 저장 후 modal 유지
 - [x] 기존 피드백 읽기 전용 표시와 삭제되지 않은 댓글/답글 count 배지
 - [x] owner/staff 제공자와 담당 일정 관계 서버 재검증
 - [x] 학생별 독립 수정 route 제거 및 학생 피드백 조회 dialog inline 수정
@@ -85,7 +100,7 @@ PR30의 `operator_accounts`를 권한 source of truth로 사용한다. owner만 
 - [x] 다중 feedback
 - [x] 실제 제공 직원
 - [x] soft-delete
-- [x] 게시
+- [x] 단일 공개 상태
 - [x] 댓글/답글 thread
 - [x] legacy feedback_responses 제거
 - [x] mutation 0행/오류 성공 오표시 방지
@@ -176,7 +191,7 @@ PR30의 `operator_accounts`를 권한 source of truth로 사용한다. owner만 
 - [x] 일정 상세
 - [x] 담당자
 - [x] 본인 출결
-- [x] 게시 피드백
+- [x] 본인 피드백
 - [x] 댓글/답글
 - [x] 내 피드백 기간 필터·정렬 아카이브
 - [x] 학생 보강 수치 조건부 표시 및 사용자 UI 확인

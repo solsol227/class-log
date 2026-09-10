@@ -26,7 +26,7 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
-function formatPublishedAt(value: string) {
+function formatRecordedAt(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
@@ -62,11 +62,10 @@ export default async function StudentScheduleDetailPage({
     supabase.from("lesson_staff").select("staff_id, role, created_at").eq("lesson_id", lessonId).order("created_at"),
     supabase
       .from("lesson_feedback")
-      .select("id, lesson_id, body, published_at, created_at")
+      .select("id, lesson_id, body, created_at")
       .eq("lesson_id", lessonId)
-      .not("published_at", "is", null)
       .is("deleted_at", null)
-      .order("published_at", { ascending: true })
+      .order("created_at", { ascending: true })
       .limit(STUDENT_FEEDBACK_LIMIT),
   ]);
   const primaryError = attendanceResult.error ?? lessonStaffResult.error ?? feedbackResult.error;
@@ -123,7 +122,7 @@ export default async function StudentScheduleDetailPage({
           <div><dt className="text-sm font-bold text-[var(--muted)]">날짜</dt><dd className="mt-1 font-semibold">{formatDate(lesson.starts_at)}</dd></div>
           <div><dt className="text-sm font-bold text-[var(--muted)]">시간</dt><dd className="mt-1 font-semibold">{formatTime(lesson.starts_at)} ~ {formatTime(lesson.ends_at)}</dd></div>
           <div><dt className="text-sm font-bold text-[var(--muted)]">장소</dt><dd className="mt-1 font-semibold">{lesson.location || "미정"}</dd></div>
-          <div><dt className="text-sm font-bold text-[var(--muted)]">내 출결</dt><dd className="mt-1 font-semibold">{attendanceLabel(attendance?.status ?? null, lesson.ends_at)}</dd>{attendance?.recorded_at ? <dd className="mt-1 text-xs text-[var(--muted)]">최초 기록 {formatPublishedAt(attendance.recorded_at)}</dd> : null}</div>
+          <div><dt className="text-sm font-bold text-[var(--muted)]">내 출결</dt><dd className="mt-1 font-semibold">{attendanceLabel(attendance?.status ?? null, lesson.ends_at)}</dd>{attendance?.recorded_at ? <dd className="mt-1 text-xs text-[var(--muted)]">최초 기록 {formatRecordedAt(attendance.recorded_at)}</dd> : null}</div>
         </dl>
         <div className="mt-6 border-t border-[var(--line)] pt-5">
           <h2 className="text-lg font-bold">담당 직원</h2>
@@ -131,8 +130,8 @@ export default async function StudentScheduleDetailPage({
         </div>
       </section>
 
-      <section className="mt-8" aria-labelledby="published-feedback">
-        <h2 id="published-feedback" className="text-2xl font-bold">게시된 피드백</h2>
+      <section className="mt-8" aria-labelledby="lesson-feedback">
+        <h2 id="lesson-feedback" className="text-2xl font-bold">피드백</h2>
         {notices.feedbackError === "1" ? <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 font-bold text-rose-900">댓글을 저장하지 못했습니다. 내용을 확인한 뒤 다시 시도해 주세요.</p> : null}
         {feedback.length ? (
           <div className="mt-5 space-y-5">
@@ -143,7 +142,7 @@ export default async function StudentScheduleDetailPage({
                 <article key={item.id} id={`feedback-${item.id}`} className="scroll-mt-24 rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-7">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                     <p className="font-bold text-[var(--accent-strong)]">{author ? `${author.display_name} · ${STAFF_ROLE_LABELS[author.role] ?? author.role}` : "피드백 제공자"}</p>
-                    <time className="text-[var(--muted)]" dateTime={item.published_at ?? undefined}>{item.published_at ? `${formatPublishedAt(item.published_at)} 게시` : ""}</time>
+                    <time className="text-[var(--muted)]" dateTime={item.created_at}>{formatRecordedAt(item.created_at)}</time>
                   </div>
                   <p className="mt-5 whitespace-pre-wrap break-words text-[1.05rem] leading-8">{item.body}</p>
                   <StudentFeedbackThread feedbackId={item.id} lessonId={lessonId} comments={itemComments} authorNames={commentAuthorNames} />
@@ -153,8 +152,8 @@ export default async function StudentScheduleDetailPage({
           </div>
         ) : (
           <div className="mt-5 rounded-2xl border border-[var(--line)] bg-white p-6">
-            <p className="font-bold">아직 게시된 피드백이 없습니다.</p>
-            <p className="mt-2 text-[var(--muted)]">피드백이 게시되면 이 화면에서 확인할 수 있어요.</p>
+            <p className="font-bold">아직 피드백이 없습니다.</p>
+            <p className="mt-2 text-[var(--muted)]">피드백이 작성되면 이 화면에서 확인할 수 있어요.</p>
           </div>
         )}
       </section>

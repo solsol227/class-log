@@ -37,6 +37,8 @@ export type DeleteStudentActionState = {
 
 export type StudentAssignmentActionState = {
   formError?: string;
+  success?: boolean;
+  assignedCount?: number;
 };
 
 export async function addAllowanceAdjustment(studentId: string, studentProgramId: string, formData: FormData) {
@@ -133,34 +135,42 @@ function parseProgramChanges(value: FormDataEntryValue | null): ProgramChanges |
   }
 }
 
-export async function assignScheduleToStudent(
+export async function assignSchedulesToStudent(
   studentId: string,
   _previousState: StudentAssignmentActionState,
   formData: FormData,
 ): Promise<StudentAssignmentActionState> {
   await requireOperatorAccess({ owner: true });
-  const lessonId = String(formData.get("lesson_id") ?? "");
+  let lessonIds: string[] = [];
+  try {
+    const parsed = JSON.parse(String(formData.get("lesson_ids") ?? ""));
+    if (Array.isArray(parsed)) lessonIds = parsed.map(String);
+  } catch {
+    lessonIds = [];
+  }
   const studentProgramId = String(formData.get("student_program_id") ?? "");
 
-  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(lessonId) || !UUID_PATTERN.test(studentProgramId)) {
+  if (!UUID_PATTERN.test(studentId) || !UUID_PATTERN.test(studentProgramId) || lessonIds.length < 1 || lessonIds.length > 100 || lessonIds.some((id) => !UUID_PATTERN.test(id)) || new Set(lessonIds).size !== lessonIds.length) {
     return { formError: "배정할 학생 또는 일정을 확인해 주세요." };
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: assignment, error } = await supabase.rpc("assign_student_to_lesson", {
-    target_lesson_id: lessonId,
+  const { data: assignments, error } = await supabase.rpc("assign_student_to_lessons", {
+    target_lesson_ids: lessonIds,
     target_student_id: studentId,
     target_student_program_id: studentProgramId,
   });
-  if (error || !assignment) {
-    console.error(error);
+  if (error || !Array.isArray(assignments) || assignments.length !== lessonIds.length) {
+    if (error) console.error({ code: error.code });
     return { formError: error?.code === "23514" ? "이용권의 남은 횟수 또는 상태를 확인해 주세요." : "일정을 배정하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/operator/schedules");
-  revalidatePath(`/operator/schedules/${lessonId}`);
+  lessonIds.forEach((lessonId) => revalidatePath(`/operator/schedules/${lessonId}`));
   revalidatePath(`/operator/students/${studentId}`);
-  redirect(`/operator/students/${studentId}?assigned=1`);
+  revalidatePath(`/operator/students/${studentId}/lessons`);
+  revalidatePath("/student/schedule");
+  return { success: true, assignedCount: assignments.length };
 }
 
 export async function updateStudentProfile(

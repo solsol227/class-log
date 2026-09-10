@@ -61,7 +61,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
     supabase.from("student_programs").select("id, student_id, program_type, status, base_allowance_count"),
     supabase.from("staff_profiles").select("id, display_name, role, is_active").order("display_name"),
     supabase.from("lesson_staff").select("staff_id, role").eq("lesson_id", lessonId),
-    supabase.from("lesson_feedback").select("id, student_id, author_staff_id, body, published_at, created_at, feedback_comments(count)").eq("lesson_id", lessonId).is("deleted_at", null).is("feedback_comments.deleted_at", null).order("created_at", { ascending: false }),
+    supabase.from("lesson_feedback").select("id, student_id, author_staff_id, created_by, body, created_at, feedback_comments(count)").eq("lesson_id", lessonId).is("deleted_at", null).is("feedback_comments.deleted_at", null).order("created_at", { ascending: false }),
   ]);
   if (assignmentsError || studentsError || attendanceError || programsError || staffError || lessonStaffError || feedbackError) {
     throw new Error("일정과 학생 정보를 불러오지 못했습니다.", { cause: assignmentsError ?? studentsError ?? attendanceError ?? programsError ?? staffError ?? lessonStaffError ?? feedbackError });
@@ -116,9 +116,10 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
       id: item.id,
       body: item.body,
       authorName: staffNames.get(item.author_staff_id) ?? "작성자 확인 불가",
-      publishedAt: item.published_at,
       createdAt: item.created_at,
       commentCount: item.feedback_comments?.[0]?.count ?? 0,
+      canEdit: access.isOwner || Boolean(isAssignedStaff && (item.created_by === access.authUserId || item.author_staff_id === access.staffProfileId)),
+      canDelete: access.isOwner,
     })),
   }));
 

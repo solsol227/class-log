@@ -14,7 +14,6 @@ export type OperatorFeedbackItem = {
   authorName: string;
   authorRole: string;
   authorStaffId: string;
-  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
   commentCount: number;
@@ -36,7 +35,6 @@ type FeedbackRow = {
   student_id: string;
   author_staff_id: string;
   body: string;
-  published_at: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -49,7 +47,7 @@ export async function loadOperatorStudentFeedback(
 ) {
   const feedbackResult = await supabase
     .from("lesson_feedback")
-    .select("id, lesson_id, student_id, author_staff_id, body, published_at, created_at, updated_at, created_by")
+    .select("id, lesson_id, student_id, author_staff_id, body, created_at, updated_at, created_by")
     .eq("student_id", student.id)
     .is("deleted_at", null);
   if (feedbackResult.error) {
@@ -111,7 +109,6 @@ export async function loadOperatorStudentFeedback(
       authorName: author?.display_name ?? "작성자 확인 불가",
       authorRole: author ? STAFF_ROLE_LABELS[author.role] ?? author.role : "",
       authorStaffId: item.author_staff_id,
-      publishedAt: item.published_at,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
       commentCount: itemComments.filter((comment) => !comment.deleted_at).length,

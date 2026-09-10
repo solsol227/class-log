@@ -13,7 +13,6 @@ export type FeedbackModalActionState = {
     id: string;
     body: string;
     authorName: string;
-    publishedAt: string;
     createdAt: string;
     commentCount: number;
   };
@@ -71,10 +70,9 @@ export async function createModalFeedback(lessonId: string, studentId: string, _
   ]);
   if (!contextAllowed || !assignedStaffAllowed || !author) return { status: "error", message: "피드백을 저장할 수 없습니다. 학생과 담당 직원 배정을 확인해 주세요." };
 
-  const publishedAt = new Date().toISOString();
-  const result = await supabase.from("lesson_feedback").insert({ lesson_id: lessonId, student_id: studentId, author_staff_id: authorStaffId, body, published_at: publishedAt }).select("id, body, published_at, created_at").maybeSingle();
+  const result = await supabase.from("lesson_feedback").insert({ lesson_id: lessonId, student_id: studentId, author_staff_id: authorStaffId, body }).select("id, body, created_at").maybeSingle();
   if (result.error || !result.data) return { status: "error", message: "피드백을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 
   revalidateFeedbackPaths(lessonId, studentId);
-  return { status: "success", message: "피드백을 저장하고 학생에게 게시했습니다.", feedback: { id: result.data.id, body: result.data.body, authorName: author.display_name, publishedAt: result.data.published_at, createdAt: result.data.created_at, commentCount: 0 } };
+  return { status: "success", message: "피드백을 저장했습니다.", feedback: { id: result.data.id, body: result.data.body, authorName: author.display_name, createdAt: result.data.created_at, commentCount: 0 } };
 }
