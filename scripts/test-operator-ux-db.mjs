@@ -66,7 +66,7 @@ try {
     }
     await db.exec(await readFile(new URL(file, migrationDir), 'utf8'));
   }
-  check(files.length === 34, 'all 34 append-only migrations loaded');
+  check(files.length === 35, 'all 35 append-only migrations loaded');
   stage = 'staff operator account bootstrap';
   await claims('operator', ids.operator);
   await db.query('insert into auth.users(id, raw_app_meta_data) values ($1,$2),($3,$2)', [ids.staffAuth, JSON.stringify({ role: 'operator' }), ids.otherStaffAuth]);
@@ -108,13 +108,97 @@ try {
   await blocked(() => scalar('select public.cancel_lesson($1)', [replacement]), 'P0001', 'linked Draft cancellation cannot bypass makeup protection');
   await blocked(() => db.query('delete from public.lessons where id=$1', [replacement]), 'P0001', 'linked Draft delete guard retained');
   const emptyDraft = await save(null, 'weekday', [], 'empty Draft', 'draft', '2096-02-05');
-  check(await scalar('delete from public.lessons where id=$1 returning true', [emptyDraft]), 'empty Draft remains deletable');
+  await blocked(() => scalar('delete from public.lessons where id=$1 returning true', [emptyDraft]), 'P0001', 'even an empty Draft requires the protected delete RPC');
+  check(await scalar('select public.delete_lesson_safely($1)', [emptyDraft]) === emptyDraft, 'empty Draft is deleted through the protected RPC');
   const cancellable = await save(null, 'trial', [], 'cancel fixture', 'scheduled', '2096-02-06');
   await scalar('select public.cancel_lesson($1)', [cancellable]);
   check(await scalar('select status from public.lessons where id=$1', [cancellable]) === 'cancelled', 'confirmed cancellation retained');
 
   for (let day = 7; day <= 9; day++) await save(null, 'trial', [monthly], 'quota fixture', 'scheduled', '2096-02-0' + day);
   await blocked(() => save(null, 'weekend', [monthly], 'over quota', 'scheduled', '2096-02-10'), '23514', 'category never bypasses ordinary quota');
+
+  stage = 'safe lesson hard delete';
+  const rental = await scalar("select id from public.student_programs where student_id=$1 and program_type='rental' and status='active'", [ids.b]);
+  const staff = await scalar("insert into public.staff_profiles(display_name,role) values ('fixture staff','manager') returning id");
+  const deletableDraft = await save(null, 'weekday', [monthly, rental], 'delete Draft', 'draft', '2096-03-01');
+  await save(deletableDraft, 'weekday', [monthly], 'delete Draft', 'draft', '2096-03-01');
+  await db.query("insert into public.lesson_staff(lesson_id,staff_id,role) values ($1,$2,'manager')", [deletableDraft, staff]);
+  check(await scalar('select count(*)::int from public.lesson_assignments where lesson_id=$1', [deletableDraft]) === 2, 'delete fixture includes active and soft-unassigned rows');
+  check(await scalar('select public.delete_lesson_safely($1)', [deletableDraft]) === deletableDraft, 'Draft hard delete returns the target id');
+  check(await scalar('select count(*)::int from public.lessons where id=$1', [deletableDraft]) === 0, 'Draft lesson row is hard deleted');
+  check(await scalar('select count(*)::int from public.lesson_assignments where lesson_id=$1', [deletableDraft]) === 0, 'active and soft-unassigned rows are deleted');
+  check(await scalar('select count(*)::int from public.lesson_staff where lesson_id=$1', [deletableDraft]) === 0, 'lesson staff rows are deleted');
+  await db.exec('reset role');
+  check(await scalar('select count(*)::int from private.lesson_delete_capabilities') === 0, 'transaction capability is removed after success');
+  await db.exec('set role authenticated');
+
+  const rentalRemainingBefore = await scalar('select remaining_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]);
+  const deletableScheduled = await save(null, 'weekend', [rental], 'delete Scheduled', 'scheduled', '2096-03-02');
+  check(await scalar('select remaining_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]) === rentalRemainingBefore - 1, 'Scheduled assignment reserves one allowance');
+  await blocked(() => db.query('delete from public.lesson_assignments where lesson_id=$1', [deletableScheduled]), 'P0001', 'direct assignment hard delete remains blocked');
+  check(await scalar('select public.delete_lesson_safely($1)', [deletableScheduled]) === deletableScheduled, 'Scheduled lesson without history is hard deleted');
+  check(await scalar('select remaining_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]) === rentalRemainingBefore, 'Scheduled hard delete returns the reserved allowance');
+
+  const rentalUsedBefore = await scalar('select used_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]);
+  const deletableCompleted = await save(null, 'trial', [rental], 'delete Completed', 'scheduled', '2026-03-02');
+  check(await scalar('select status from public.lessons where id=$1', [deletableCompleted]) === 'completed', 'elapsed fixture is stored as Completed');
+  check(await scalar('select used_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]) === rentalUsedBefore + 1, 'Completed assignment counts as used');
+  await scalar('select public.delete_lesson_safely($1)', [deletableCompleted]);
+  check(await scalar('select used_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]) === rentalUsedBefore, 'Completed hard delete returns the used allowance');
+
+  const deletableCancelled = await save(null, 'trial', [rental], 'delete Cancelled', 'scheduled', '2096-03-03');
+  await scalar('select public.cancel_lesson($1)', [deletableCancelled]);
+  check(await scalar('select public.delete_lesson_safely($1)', [deletableCancelled]) === deletableCancelled, 'Cancelled lesson without history is hard deleted');
+
+  const attendanceDeletable = await save(null, 'trial', [rental], 'attendance deletable', 'scheduled', '2026-03-04');
+  await db.query("insert into public.attendance_records(lesson_id,student_id,status) values ($1,$2,'present')", [attendanceDeletable, ids.b]);
+  await blocked(() => db.query('delete from public.attendance_records where lesson_id=$1', [attendanceDeletable]), ['42501', '23514'], 'direct attendance delete remains blocked');
+  stage = 'safe lesson hard delete with attendance';
+  check(await scalar('select public.delete_lesson_safely($1)', [attendanceDeletable]) === attendanceDeletable, 'protected RPC deletes a lesson with attendance');
+  check(await scalar('select count(*)::int from public.attendance_records where lesson_id=$1', [attendanceDeletable]) === 0, 'lesson hard delete removes linked attendance');
+  check(await scalar('select count(*)::int from public.lessons where id=$1', [attendanceDeletable]) === 0, 'lesson with attendance is hard deleted');
+
+  const feedbackProtected = await save(null, 'trial', [rental], 'feedback protected', 'scheduled', '2026-03-05');
+  const feedback = await scalar("insert into public.lesson_feedback(lesson_id,student_id,author_staff_id,body) values ($1,$2,$3,'protected feedback') returning id", [feedbackProtected, ids.b, staff]);
+  await db.query("insert into public.feedback_comments(feedback_id,body) values ($1,'protected comment')", [feedback]);
+  stage = 'safe lesson hard delete feedback reason';
+  await blocked(() => scalar('select public.delete_lesson_safely($1)', [feedbackProtected]), 'P1001', 'feedback and comments return their specific hard-delete reason');
+  check(await scalar('select count(*)::int from public.feedback_comments where feedback_id=$1', [feedback]) === 1, 'blocked feedback delete preserves comments');
+  stage = 'safe lesson hard delete active original makeup reason';
+  await blocked(() => scalar('select public.delete_lesson_safely($1)', [source]), 'P1002', 'active original makeup returns its specific hard-delete reason');
+  stage = 'safe lesson hard delete active replacement makeup reason';
+  await blocked(() => scalar('select public.delete_lesson_safely($1)', [replacement]), 'P1002', 'active replacement makeup and events return their specific hard-delete reason');
+
+  stage = 'safe lesson hard delete cancelled makeup fixture';
+  const cancelledMakeupSource = await save(null, 'trial', [rental], 'cancelled makeup source', 'scheduled', '2026-03-07');
+  stage = 'safe lesson hard delete cancelled makeup attendance';
+  await db.query("insert into public.attendance_records(lesson_id,student_id,status) values ($1,$2,'excused')", [cancelledMakeupSource, ids.b]);
+  const cancelledMakeup = await scalar('select id from public.makeup_lessons where original_lesson_id=$1', [cancelledMakeupSource]);
+  const cancelledMakeupReplacement = await save(null, 'trial', [], 'cancelled makeup replacement', 'scheduled', '2096-03-07');
+  await scalar('select public.schedule_makeup_lesson($1,$2)', [cancelledMakeup, cancelledMakeupReplacement]);
+  stage = 'safe lesson hard delete cancel makeup entitlement';
+  await db.exec('reset role');
+  await db.query("update public.makeup_lessons set status='cancelled' where id=$1", [cancelledMakeup]);
+  await db.exec('set role authenticated');
+  stage = 'safe lesson hard delete cancel lesson';
+  await scalar('select public.cancel_lesson($1)', [cancelledMakeupReplacement]);
+  check(await scalar("select status='cancelled' from public.lessons where id=$1", [cancelledMakeupReplacement]), 'makeup replacement lesson is cancelled before hard delete');
+  check(await scalar("select status='cancelled' from public.makeup_lessons where id=$1", [cancelledMakeup]), 'cancelled replacement fixture has a cancelled makeup relationship');
+  check(await scalar('select count(*)::int from public.makeup_lesson_events where makeup_lesson_id=$1', [cancelledMakeup]) > 0, 'cancelled makeup fixture includes event history');
+  stage = 'safe lesson hard delete cancelled makeup';
+  check(await scalar('select public.delete_lesson_safely($1)', [cancelledMakeupReplacement]) === cancelledMakeupReplacement, 'cancelled replacement lesson with only cancelled makeup hard deletes');
+  check(await scalar('select count(*)::int from public.makeup_lessons where id=$1', [cancelledMakeup]) === 0, 'allowed hard delete removes cancelled makeup relationship');
+  check(await scalar('select count(*)::int from public.makeup_lesson_events where makeup_lesson_id=$1', [cancelledMakeup]) === 0, 'allowed hard delete removes cancelled makeup events');
+  check(await scalar('select count(*)::int from public.lessons where id=$1', [cancelledMakeupSource]) === 1, 'deleting the cancelled replacement preserves the original lesson');
+  check(await scalar('select count(*)::int from public.attendance_records where lesson_id=$1', [cancelledMakeupSource]) === 1, 'deleting the cancelled replacement preserves original attendance');
+
+  const quickConfirm = await save(null, 'weekday', [rental], 'quick confirm', 'draft', '2096-03-06');
+  const quickConfirmRemainingBefore = await scalar('select remaining_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]);
+  check(await scalar('select public.confirm_draft_lesson($1)', [quickConfirm]) === quickConfirm, 'owner Draft quick confirm passes the owner permission boundary');
+  check(await scalar('select status from public.lessons where id=$1', [quickConfirm]) === 'scheduled', 'quick confirm stores the future Draft as Scheduled');
+  check(await scalar('select remaining_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]) === quickConfirmRemainingBefore - 1, 'quick confirm starts allowance reservation');
+  await scalar('select public.delete_lesson_safely($1)', [quickConfirm]);
+  check(await scalar('select remaining_count from public.student_program_allowance_statuses where student_program_id=$1 and period_month is null', [rental]) === quickConfirmRemainingBefore, 'deleting the confirmed Draft returns its reservation');
 
   stage = 'PR26 makeup completion policy';
   const manualSource = await save(null, 'trial', [monthly], 'manual completion source', 'scheduled', '2026-02-15');
@@ -186,7 +270,6 @@ try {
 
   const activeTrial = await scalar("select id from public.student_programs where student_id=$1 and program_type='trial' and status='active'", [ids.a]);
   check(Boolean(await save(null, 'weekday', [activeTrial], 'trial in weekday', 'scheduled', '2096-02-12')), 'trial allowance accepted in weekday category');
-  const rental = await scalar("select id from public.student_programs where student_id=$1 and program_type='rental' and status='active'", [ids.b]);
   check(Boolean(await save(null, 'weekday', [rental], 'rental in weekday', 'scheduled', '2096-02-12')), 'rental allowance accepted in weekday category');
 
   stage = 'RLS and RPC grants';
@@ -197,7 +280,10 @@ try {
   await claims('operator', ids.staffAuth);
   check(await scalar("select public.get_my_operator_context()->>'accessLevel'") === 'staff', 'active linked staff resolves staff context');
   check(await scalar('select count(*)::int from public.students') === 2, 'active staff can read operational student data');
+  check(await scalar('select count(*)::int from public.lessons') > 0, 'active staff can read schedules');
   await blocked(() => save(null, 'trial'), '42501', 'staff cannot create schedules');
+  await blocked(() => scalar('select public.delete_lesson_safely($1)', [lesson]), '42501', 'staff lesson hard delete denied');
+  await blocked(() => scalar('select public.confirm_draft_lesson($1)', [legacy]), '42501', 'staff Draft quick confirm denied');
   stage = 'assigned staff attendance';
   check(Boolean(await scalar("update public.attendance_records set status='absent' where lesson_id=$1 and student_id=$2 returning id", [source, ids.a])), 'assigned staff can update attendance');
   stage = 'assigned staff feedback';
@@ -221,11 +307,16 @@ try {
   await blocked(profileSave, ['42501', 'P0002'], 'student profile mutation denied');
   await blocked(() => programsSave({}), ['42501', 'P0002'], 'student programs mutation denied');
   await blocked(() => save(null, 'weekday'), ['42501', 'P0002'], 'student lesson mutation denied');
+  await blocked(() => scalar('select public.delete_lesson_safely($1)', [lesson]), ['42501', 'P0002'], 'student lesson hard delete denied');
+  await blocked(() => scalar('select public.confirm_draft_lesson($1)', [legacy]), ['42501', 'P0002'], 'student Draft quick confirm denied');
   await blocked(() => scalar('select public.complete_makeup_without_schedule($1,null)', [manualMakeup]), ['42501', 'P0002'], 'student manual makeup completion denied');
   check(!await scalar("select has_function_privilege('anon','public.complete_makeup_without_schedule(uuid,text)','EXECUTE')"), 'anonymous manual completion RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.restore_manual_makeup_completion(uuid)','EXECUTE')"), 'anonymous manual restore RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.save_student_programs(uuid,jsonb)','EXECUTE')"), 'anonymous programs RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.save_student_profile(uuid,text,text,integer,text,text,date,text)','EXECUTE')"), 'anonymous profile RPC denied');
+  check(!await scalar("select has_function_privilege('anon','public.delete_lesson_safely(uuid)','EXECUTE')"), 'anonymous lesson hard delete RPC denied');
+  check(!await scalar("select has_function_privilege('anon','public.confirm_draft_lesson(uuid)','EXECUTE')"), 'anonymous Draft confirmation RPC denied');
+  check(!await scalar("select has_function_privilege('anon','private.is_owner()','EXECUTE')"), 'anonymous owner permission helper denied');
   console.log(`PASS: ${files.length} migrations and ${passed} local PostgreSQL assertions. Synthetic in-memory data only.`);
 } catch (error) {
   // Never print query parameters, identities, or raw database errors.

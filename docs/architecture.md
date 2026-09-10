@@ -174,6 +174,14 @@ Draft를 scheduled로 확정한다.
 
 학생 이용권 RPC는 본인 집계만 반환하며 Draft 개수는 0으로 숨기고 Draft만으로 생긴 월도 제외한다. 운영자 집계에는 Draft가 유지된다.
 
+### `delete_lesson_safely`
+
+피드백·댓글과 취소되지 않은 보강 관계가 없는 lesson을 상태와 무관하게 hard delete한다. 출결은 삭제 대상이며, 대상 lesson이 취소 상태이고 관련 보강도 모두 취소 상태이면 해당 보강 event와 보강 row도 함께 삭제한다. lesson, assignment, student program, 출결, 피드백과 보강 관계를 잠근 뒤 조건을 transaction 안에서 재검사하고 허용된 관계만 원자적으로 제거한다. 별도 allowance adjustment를 만들지 않으며 일반 이용권 집계는 삭제된 확정 assignment를 자동으로 제외한다.
+
+직접 assignment/attendance/makeup/lesson DELETE는 guard가 차단한다. RPC가 사용하는 예외는 authenticated caller가 만들 수 없는 `private.lesson_delete_capabilities`의 transaction·lesson·actor와 허용된 makeup ID 조합으로 제한한다. 피드백·댓글과 활성/완료 보강은 서로 다른 SQLSTATE로 거부해 UI가 실제 차단 사유를 안내한다.
+
+PR30 병합 후 삭제와 Draft 확정은 서버의 `requireOperatorAccess({ owner: true })`와 DB의 `private.is_owner()`를 공통 권한 경계로 사용한다. owner만 두 mutation을 실행할 수 있고 staff는 일정 조회만 가능하며, student와 anon은 모두 차단한다.
+
 ## 7. 직원
 
 `staff_profiles`:

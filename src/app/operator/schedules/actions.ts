@@ -53,6 +53,19 @@ export type RosterAttendanceActionState = { formError?: string };
 const ATTENDANCE_STATUSES = ["present", "absent", "excused"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
+function revalidateScheduleMutationViews(lessonId: string, studentIds: string[]) {
+  revalidatePath("/operator/schedules");
+  revalidatePath(`/operator/schedules/${lessonId}`);
+  revalidatePath("/operator/students/[id]", "page");
+  revalidatePath("/operator/students/[id]/lessons", "page");
+  revalidatePath("/student/schedule");
+  revalidatePath("/student/plans");
+  for (const studentId of new Set(studentIds)) {
+    revalidatePath(`/operator/students/${studentId}`);
+    revalidatePath(`/operator/students/${studentId}/lessons`);
+  }
+}
+
 function isLeapYear(year: number) {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 }
@@ -285,46 +298,75 @@ export async function deleteSchedule(
   if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
 
   const supabase = await createSupabaseServerClient();
-  const [makeupsResult, makeupEventsResult] = await Promise.all([
-    supabase
-      .from("makeup_lessons")
-      .select("id")
-      .or(`original_lesson_id.eq.${lessonId},replacement_lesson_id.eq.${lessonId}`)
-      .limit(1),
-    supabase
-      .from("makeup_lesson_events")
-      .select("id")
-      .eq("replacement_lesson_id", lessonId)
-      .limit(1),
-  ]);
-  if (makeupsResult.error || makeupEventsResult.error) {
-    console.error(makeupsResult.error ?? makeupEventsResult.error);
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("lesson_assignments")
+    .select("student_id")
+    .eq("lesson_id", lessonId);
+  if (assignmentsError) {
+    console.error({ code: assignmentsError.code });
     return { formError: "관련 기록을 확인하지 못해 일정을 삭제하지 않았습니다." };
   }
-  if (makeupsResult.data.length > 0 || makeupEventsResult.data.length > 0) {
-    return { formError: "이 일정이 보강 원수업·대체 일정 또는 처리 이력으로 연결되어 있어 삭제할 수 없습니다." };
-  }
 
-  const { data: deleted, error } = await supabase.from("lessons").delete().eq("id", lessonId).select("id").maybeSingle();
-  if (error || !deleted) {
+  const { data: deletedLessonId, error } = await supabase.rpc("delete_lesson_safely", {
+    target_lesson_id: lessonId,
+  });
+  if (error || deletedLessonId !== lessonId) {
     if (error) console.error({ code: error.code });
-    return { formError: error?.code === "23503" ? "연결된 기록이 있어 일정을 삭제할 수 없습니다. 관련 기록을 먼저 확인해 주세요." : "일정을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    return {
+      formError: error?.code === "P1001"
+        ? "피드백 또는 댓글이 작성된 일정은 삭제할 수 없습니다. 연결된 피드백 기록을 먼저 확인해 주세요."
+        : error?.code === "P1002"
+          ? "취소되지 않은 보강 일정이 연결되어 삭제할 수 없습니다. 연결된 보강을 먼저 취소해 주세요."
+          : error?.code === "P0001"
+            ? "연결된 기록을 안전하게 정리할 수 없어 일정을 삭제하지 않았습니다."
+        : error?.code === "P0002"
+          ? "일정을 찾을 수 없습니다."
+          : "일정을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    };
   }
 
-  revalidatePath("/operator/schedules");
+  revalidateScheduleMutationViews(lessonId, (assignments ?? []).map((assignment) => assignment.student_id));
   redirect("/operator/schedules?deleted=1");
+}
+
+async function confirmDraft(lessonId: string): Promise<ManagementActionState> {
+  await requireOperatorAccess({ owner: true });
+  if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
+  const supabase = await createSupabaseServerClient();
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("lesson_assignments")
+    .select("student_id")
+    .eq("lesson_id", lessonId)
+    .is("unassigned_at", null);
+  if (assignmentsError) {
+    console.error({ code: assignmentsError.code });
+    return { formError: "일정의 배정 정보를 확인하지 못했습니다." };
+  }
+  const { data, error } = await supabase.rpc("confirm_draft_lesson", { target_lesson_id: lessonId });
+  if (error || !data) return { formError: error?.code === "23P01" ? "학생의 다른 일정과 시간이 겹쳐 확정할 수 없습니다." : "Draft 일정을 확정하지 못했습니다." };
+  revalidateScheduleMutationViews(lessonId, (assignments ?? []).map((assignment) => assignment.student_id));
+  return {};
 }
 
 export async function confirmDraftSchedule(lessonId: string, _previousState: ManagementActionState): Promise<ManagementActionState> {
   void _previousState;
-  await requireOperatorAccess({ owner: true });
-  if (!UUID_PATTERN.test(lessonId)) return { formError: "일정을 찾을 수 없습니다." };
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("confirm_draft_lesson", { target_lesson_id: lessonId });
-  if (error || !data) return { formError: error?.code === "23P01" ? "학생의 다른 일정과 시간이 겹쳐 확정할 수 없습니다." : "Draft 일정을 확정하지 못했습니다." };
-  revalidatePath("/operator/schedules");
-  revalidatePath(`/operator/schedules/${lessonId}`);
+  const state = await confirmDraft(lessonId);
+  if (state.formError) return state;
   redirect(`/operator/schedules/${lessonId}?updated=1`);
+}
+
+export async function confirmDraftScheduleFromList(
+  lessonId: string,
+  returnPath: string,
+  _previousState: ManagementActionState,
+): Promise<ManagementActionState> {
+  void _previousState;
+  const state = await confirmDraft(lessonId);
+  if (state.formError) return state;
+  const safeReturnPath = /^\/operator\/schedules(?:\?[^#]*)?$/.test(returnPath)
+    ? returnPath
+    : "/operator/schedules?confirmed=1";
+  redirect(safeReturnPath);
 }
 
 export async function cancelSchedule(lessonId: string, _previousState: ManagementActionState): Promise<ManagementActionState> {

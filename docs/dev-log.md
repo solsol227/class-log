@@ -4,6 +4,16 @@
 
 목적은 다음 작업자나 다음 Codex 세션이 git log와 긴 대화를 처음부터 뒤지지 않고도 현재 상태를 이해하게 하는 것이다.
 
+## 2026-09-09 — Codex — 일정 hard delete·Draft 목록 빠른 확정
+
+- 한 일: 조건에 맞는 lesson을 원자적으로 제거하는 append-only migration, 실제 삭제 확인 dialog, 일정 목록 Draft 빠른 확정, 담당자·배정 학생 한 줄 레이아웃을 구현했다. 카드 배지는 확정 버튼과 같은 우측 영역에 정렬하고 세로 구분선은 제거했다.
+- PR30 반영: PR30이 병합된 `355c481`을 fast-forward로 반영하고, 삭제·확정 검사를 서버 `requireOperatorAccess({ owner: true })`와 DB `private.is_owner()`에 연결했다. staff 화면에는 삭제·빠른 확정 UI를 렌더링하지 않는다.
+- 데이터 보호: 출결은 안내 후 일정과 함께 삭제한다. 피드백·댓글과 취소되지 않은 보강은 구체적인 사유로 차단하며, 취소된 lesson에 취소 보강만 연결된 경우 보강 event와 보강 row를 함께 원자적으로 제거한다. 허용된 삭제는 active·soft-unassigned assignment와 담당자 관계도 제거하며 assignment 기반 예약·사용 횟수를 자연스럽게 반환한다.
+- 검증: 합성 in-memory DB에서 35개 migration과 103개 assertion을 통과했다. owner 삭제·확정, staff 일정 조회와 삭제·확정 차단, student/anon 차단, 상태별 삭제, 출결 동반 삭제, 취소된 보강 대체 일정과 보강·event 정리, 원 일정·출결 보존, 피드백/활성 보강 차단 사유, rollback, 예약·사용 횟수 반환을 포함한다. ESLint, TypeScript, 인증 경계 7개 테스트, production build, diff check를 통과했고 실제 owner/student 로그인·역할 API·보호 화면과 비인증 401을 확인했다.
+- 원격 확인: PR30까지 local/remote 34개 migration이 일치하고 PR29 migration 한 건만 local-only인 상태에서 `db push --dry-run` 대상이 해당 파일 하나뿐임을 확인한 뒤 append-only migration을 적용했다. 적용 후 local/remote 35개 이력이 일치하고 public/private/extensions DB lint는 오류 없이 통과했다. 잠금 확인용 변수의 미사용 경고 1건은 데이터·권한 동작과 무관하며 적용된 migration은 수정하지 않았다.
+- 원격 권한 smoke test: 실제 `테스트 일정 1`은 호출하지 않고 존재하지 않는 UUID만 사용했다. owner의 삭제·Draft 확정은 대상 조회 단계의 P0002까지 도달했고 staff/student/anon은 두 RPC 모두 42501로 차단됐다. 사용자 일정 row mutation은 실행하지 않았다.
+- 현재 상태: 최종 변경과 원격 적용·검증을 마쳤으며 commit/push/PR/merge를 진행한다.
+
 ## 2026-09-08 — Codex — PR27 학생별 피드백 조회·그룹레슨 작성 UX
 
 - 한 일: 운영자 학생 상세에 최근 피드백 4건, 조회 전용 상세 dialog, KST 기간·정렬·게시 상태를 URL로 유지하는 학생별 전체 피드백 화면을 추가했다.
