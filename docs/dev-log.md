@@ -1,5 +1,13 @@
 # Class Log 개발 기록
 
+## 2026-09-11 — Codex — PR36 직원 담당 일정 월간 캘린더
+
+- 기준: PR33 병합 커밋 `f21ddac`와 일치하는 최신 `origin/main`에서 별도 `feat/staff-schedule-calendar` worktree를 만들었으며, 원본과 작업 tree가 clean인 상태에서 시작했다.
+- 구현: 직원 상세의 지난 일정 목록을 제거하고 KST 현재 월 기반 compact 예정 카드와 6주 월간 캘린더로 교체했다. 이전·다음 달, native month picker, `month=YYYY-MM` URL 유지·복구, 모바일 캘린더 우선 순서, 일별 2건 뒤 `+N` 전체 보기를 제공한다.
+- 데이터: 선택 월의 KST `00:00 +09:00`부터 다음 달 시작 전까지만 `lesson_staff` 기준으로 조회하고, 해당 lesson ID의 `unassigned_at is null` 학생 배정과 이름을 일괄 조회한다. 카드와 캘린더는 같은 월간 결과를 재사용하며 migration, RLS, DB·Auth 사용자 데이터는 변경하지 않았다.
+- 표시·접근성: 같은 날 일정은 날짜를 한 번만 표시하고 날짜가 넘어갈 때만 종료 날짜를 반복한다. 학생은 데스크톱 첫 3명, 모바일 첫 2명 뒤 `외 N명`으로 줄이며 캘린더 항목은 시간·active 학생 수를 표시한다. 제목·시간·인원·상태는 링크 접근성 이름과 tooltip에 유지하고 상태별 점과 텍스트 범례를 함께 제공한다.
+- 검증: 변경 파일 ESLint, `tsc --noEmit --incremental false`, production build, 실제 owner/student 로그인·역할 API·보호 화면과 비인증 401을 통과했다. 실제 owner 세션으로 직원 캘린더 200, month 누락·오류의 현재 월 307 복구를 read-only 확인했으며 사용자 production UI 확인은 대기 중이다.
+
 ## 2026-09-11 — Codex — PR34 일정 및 학생 피드백 Compact UX
 
 - 한 일: 운영자 일정 카테고리·상태 필터를 데스크톱 한 줄로 배치하고 학생 일정 카드, 일정 상세 4항목 정보, 내 피드백 필터·카드를 압축했다. 일정/피드백 목록의 유효 query를 제한된 내부 `returnTo`로 보존하며 외부·임의 경로는 일정 목록으로 복구한다.

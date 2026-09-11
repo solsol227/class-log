@@ -1,5 +1,18 @@
 # Class Log 작업 계획
 
+## 구현 완료·사용자 확인 대기 — PR36 직원 담당 일정 월간 캘린더
+
+- [x] 최신 main(PR33 포함) 기준 별도 worktree와 브랜치
+- [x] KST 현재 월 초기화와 `month=YYYY-MM` URL 상태
+- [x] 이전·다음 달 이동, native month picker, 잘못된 query 복구
+- [x] 선택 월 범위의 담당 일정과 active 학생 배정 일괄 조회
+- [x] compact 예정 일정 카드와 학생 이름 3명/모바일 2명 축약
+- [x] 6주 월간 캘린더, 상태 범례, 일별 최대 2건과 `+N` 전체 보기
+- [x] 일정 상세 링크와 제목·시간·학생 수·상태 접근성 이름
+- [x] ESLint / TypeScript / production build / diff check
+- [x] owner/student 로그인 및 보호 화면 read-only 검증
+- [ ] 사용자 production UI 확인
+
 ## 현재 기준
 
 - 구현 브랜치: `codex/neutral-lessons-allowances`
