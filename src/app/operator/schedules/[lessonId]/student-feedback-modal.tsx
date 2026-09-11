@@ -132,8 +132,11 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
 
   useEffect(() => {
     const dialog = dialogRef.current;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     if (!dialog?.open) dialog?.showModal();
     requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => { document.body.style.overflow = previousBodyOverflow; };
   }, []);
 
   function resizeTextarea(value: string) {
@@ -156,10 +159,10 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
       aria-modal="true"
       onCancel={(event) => { event.preventDefault(); requestClose(); }}
       onClose={onClosed}
-      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-2xl rounded-2xl border border-[var(--line)] bg-white p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-[#102927]/55"
+      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-2xl overflow-y-auto rounded-2xl border border-[var(--line)] bg-white p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-[#102927]/55"
     >
-      <article className="max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-5 sm:p-7">
-        <header className="flex items-start justify-between gap-4">
+      <article className="p-5 pt-0 sm:p-7 sm:pt-0">
+        <header className="sticky top-0 z-10 -mx-5 flex items-start justify-between gap-4 bg-white px-5 pb-3 pt-5 sm:-mx-7 sm:px-7 sm:pt-7">
           <h2 id="schedule-feedback-dialog-title" className="min-w-0 text-2xl font-bold tracking-[-0.03em] sm:text-3xl">{data.studentName}</h2>
           <button type="button" onClick={requestClose} aria-label="피드백 팝업 닫기" className="-mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full text-2xl font-bold hover:bg-[#eef4f3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">×</button>
         </header>
@@ -187,7 +190,7 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
                 value={body}
                 onChange={(event) => resizeTextarea(event.target.value)}
                 placeholder="피드백 내용을 입력하세요"
-                className="min-h-32 w-full resize-none overflow-hidden rounded-xl border border-[var(--line)] p-3 leading-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                className="max-h-72 min-h-32 w-full resize-none overflow-y-auto rounded-xl border border-[var(--line)] p-3 leading-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
               />
               {state.status !== "idle" ? <p role={state.status === "error" ? "alert" : "status"} className={`rounded-xl px-4 py-3 text-sm font-bold ${state.status === "error" ? "border border-rose-200 bg-rose-50 text-rose-900" : "border border-emerald-200 bg-emerald-50 text-emerald-900"}`}>{state.message}</p> : null}
               <SaveButton />

@@ -185,8 +185,8 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
         <h1 className="text-3xl font-bold tracking-[-0.04em] sm:text-4xl">일정관리</h1>
         {access.canManageSchedules ? <Link href="/operator/schedules/new" className="inline-flex min-h-11 items-center rounded-xl bg-[var(--accent)] px-4 font-bold text-white hover:bg-[var(--accent-strong)]">새 일정 등록</Link> : null}
       </header>
-      <section className="mt-6 space-y-5">
-        <div>
+      <section className="mt-6 grid gap-5 md:grid-cols-2 md:gap-8">
+        <div className="min-w-0">
           <h2 className="text-sm font-bold">일정 카테고리</h2>
           <nav aria-label="일정 카테고리 필터" className="mt-2 flex flex-wrap gap-2">
             {CATEGORY_FILTERS.map((filter) => {
@@ -212,7 +212,7 @@ export default async function SchedulesPage({ searchParams }: { searchParams: Pr
             })}
           </nav>
         </div>
-        <div>
+        <div className="min-w-0">
           <h2 className="text-sm font-bold">일정 상태</h2>
           <nav aria-label="일정 상태 필터" className="mt-2 flex flex-wrap gap-2">
             {STATUS_FILTERS.map((filter) => {

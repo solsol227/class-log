@@ -3,8 +3,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  classifySupabaseLoginError,
-  classifyUnexpectedLoginError,
   getAuthUserMessage,
   type AuthErrorCode,
   type AuthUserMessage,
@@ -17,7 +15,7 @@ import {
   InvalidStaffLoginIdError,
   staffLoginIdToAuthEmail,
 } from "@/lib/auth/operator-identity";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { loginWithPassword } from "@/app/auth/actions";
 
 type LoginMode = "operator" | "student";
 
@@ -29,10 +27,6 @@ type PasswordLoginFormProps = {
 type FieldErrors = {
   identifier?: string;
   password?: string;
-};
-
-type RoleCheckResponse = {
-  destination: "/operator/schedules" | "/student/schedule";
 };
 
 const loginConfig = {
@@ -55,27 +49,6 @@ const loginConfig = {
     buttonLabel: "학생으로 로그인",
   },
 } as const;
-
-function getRoleCheckErrorCode(status: number): AuthErrorCode {
-  if (status === 401) {
-    return "session_expired";
-  }
-
-  if (status === 403) {
-    return "invalid_role";
-  }
-
-  return "auth_server_error";
-}
-
-function isRoleCheckResponse(value: unknown): value is RoleCheckResponse {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const destination = (value as RoleCheckResponse).destination;
-  return destination === "/operator/schedules" || destination === "/student/schedule";
-}
 
 export function PasswordLoginForm({
   mode,
@@ -128,42 +101,16 @@ export function PasswordLoginForm({
     setIsSubmitting(true);
 
     try {
-      const email = mode === "student"
-        ? studentNicknameToAuthEmail(identifier)
-        : identifier.includes("@")
-          ? identifier
-          : staffLoginIdToAuthEmail(identifier);
-      const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      if (mode === "student") studentNicknameToAuthEmail(identifier);
+      else if (!identifier.includes("@")) staffLoginIdToAuthEmail(identifier);
 
-      if (error) {
-        showFormError(classifySupabaseLoginError(error));
+      const result = await loginWithPassword(mode, identifier, password);
+      if (result.status === "error") {
+        if (result.fieldError) setFieldErrors({ identifier: result.fieldError });
+        else showFormError(result.code);
         return;
       }
-
-      const roleResponse = await fetch("/api/auth/role", {
-        method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expectedRole: mode }),
-      });
-
-      if (!roleResponse.ok) {
-        showFormError(getRoleCheckErrorCode(roleResponse.status));
-        return;
-      }
-
-      const roleResult: unknown = await roleResponse.json();
-
-      if (!isRoleCheckResponse(roleResult)) {
-        showFormError("auth_server_error");
-        return;
-      }
-
-      router.replace(roleResult.destination);
+      router.replace(result.destination);
       router.refresh();
     } catch (error) {
       if (
@@ -172,7 +119,7 @@ export function PasswordLoginForm({
       ) {
         setFieldErrors({ identifier: error.message });
       } else {
-        showFormError(classifyUnexpectedLoginError(error));
+        showFormError("auth_server_error");
       }
     } finally {
       submittingRef.current = false;

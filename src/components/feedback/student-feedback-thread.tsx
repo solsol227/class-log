@@ -4,6 +4,7 @@ import type { StudentFeedbackComment } from "@/lib/feedback/student-feedback";
 type FeedbackThreadProps = {
   feedbackId: string;
   lessonId: string;
+  returnTo: string;
   comments: StudentFeedbackComment[];
   authorNames: Map<string, string>;
 };
@@ -16,11 +17,11 @@ function formatCommentTime(value: string) {
   }).format(new Date(value));
 }
 
-function ReplyForm({ feedbackId, lessonId, parentCommentId }: { feedbackId: string; lessonId: string; parentCommentId: string }) {
+function ReplyForm({ feedbackId, lessonId, returnTo, parentCommentId }: { feedbackId: string; lessonId: string; returnTo: string; parentCommentId: string }) {
   return (
     <details className="mt-2">
       <summary className="min-h-10 cursor-pointer py-2 text-sm font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">답글 달기</summary>
-      <form action={addStudentComment.bind(null, feedbackId, lessonId)} className="flex min-w-0 flex-col gap-2 sm:flex-row">
+      <form action={addStudentComment.bind(null, feedbackId, lessonId, returnTo)} className="flex min-w-0 flex-col gap-2 sm:flex-row">
         <input type="hidden" name="parent_comment_id" value={parentCommentId} />
         <label className="sr-only" htmlFor={`reply-${parentCommentId}`}>답글 내용</label>
         <input id={`reply-${parentCommentId}`} name="body" required maxLength={2000} placeholder="답글을 입력하세요" className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]" />
@@ -30,7 +31,7 @@ function ReplyForm({ feedbackId, lessonId, parentCommentId }: { feedbackId: stri
   );
 }
 
-function CommentCard({ comment, feedbackId, lessonId, authorNames, reply }: { comment: StudentFeedbackComment; feedbackId: string; lessonId: string; authorNames: Map<string, string>; reply?: boolean }) {
+function CommentCard({ comment, feedbackId, lessonId, returnTo, authorNames, reply }: { comment: StudentFeedbackComment; feedbackId: string; lessonId: string; returnTo: string; authorNames: Map<string, string>; reply?: boolean }) {
   return (
     <article className={`rounded-xl bg-[#f4f8f7] p-3 sm:p-4 ${reply ? "ml-3 border-l-2 border-[var(--line)] sm:ml-6" : ""}`}>
       <p className="text-sm font-bold">
@@ -38,12 +39,12 @@ function CommentCard({ comment, feedbackId, lessonId, authorNames, reply }: { co
         <span className="ml-2 font-normal text-[var(--muted)]">{formatCommentTime(comment.created_at)}</span>
       </p>
       <p className="mt-1 whitespace-pre-wrap break-words leading-6">{comment.body}</p>
-      <ReplyForm feedbackId={feedbackId} lessonId={lessonId} parentCommentId={comment.id} />
+      <ReplyForm feedbackId={feedbackId} lessonId={lessonId} returnTo={returnTo} parentCommentId={comment.id} />
     </article>
   );
 }
 
-export function StudentFeedbackThread({ feedbackId, lessonId, comments, authorNames }: FeedbackThreadProps) {
+export function StudentFeedbackThread({ feedbackId, lessonId, returnTo, comments, authorNames }: FeedbackThreadProps) {
   const commentById = new Map(comments.map((comment) => [comment.id, comment]));
   const roots = comments.filter((comment) => !comment.parent_comment_id);
   const repliesByRoot = new Map<string, StudentFeedbackComment[]>();
@@ -86,20 +87,20 @@ export function StudentFeedbackThread({ feedbackId, lessonId, comments, authorNa
         <div className="mt-3 space-y-3">
           {roots.map((comment) => (
             <div key={comment.id} className="space-y-2">
-              <CommentCard comment={comment} feedbackId={feedbackId} lessonId={lessonId} authorNames={authorNames} />
-              {(repliesByRoot.get(comment.id) ?? []).map((reply) => <CommentCard key={reply.id} comment={reply} feedbackId={feedbackId} lessonId={lessonId} authorNames={authorNames} reply />)}
+              <CommentCard comment={comment} feedbackId={feedbackId} lessonId={lessonId} returnTo={returnTo} authorNames={authorNames} />
+              {(repliesByRoot.get(comment.id) ?? []).map((reply) => <CommentCard key={reply.id} comment={reply} feedbackId={feedbackId} lessonId={lessonId} returnTo={returnTo} authorNames={authorNames} reply />)}
             </div>
           ))}
           {[...orphanGroups.entries()].map(([missingParentId, replies]) => (
             <div key={missingParentId} className="space-y-2">
               <p className="rounded-xl bg-[#f4f8f7] p-3 text-sm text-[var(--muted)] sm:p-4">삭제된 댓글입니다.</p>
-              {replies.map((reply) => <CommentCard key={reply.id} comment={reply} feedbackId={feedbackId} lessonId={lessonId} authorNames={authorNames} reply />)}
+              {replies.map((reply) => <CommentCard key={reply.id} comment={reply} feedbackId={feedbackId} lessonId={lessonId} returnTo={returnTo} authorNames={authorNames} reply />)}
             </div>
           ))}
         </div>
       ) : <p className="mt-2 text-sm text-[var(--muted)]">아직 댓글이 없습니다.</p>}
 
-      <form action={addStudentComment.bind(null, feedbackId, lessonId)} className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row">
+      <form action={addStudentComment.bind(null, feedbackId, lessonId, returnTo)} className="mt-4 flex min-w-0 flex-col gap-2 sm:flex-row">
         <label className="sr-only" htmlFor={`comment-${feedbackId}`}>댓글 내용</label>
         <input id={`comment-${feedbackId}`} name="body" required maxLength={2000} placeholder="댓글을 입력하세요" className="min-h-12 min-w-0 flex-1 rounded-xl border border-[var(--line)] px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]" />
         <button className="min-h-12 rounded-xl bg-[var(--accent)] px-5 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">댓글 등록</button>
