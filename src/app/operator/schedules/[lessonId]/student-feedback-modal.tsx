@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import {
   deleteFeedbackFromDialog,
   updateFeedbackFromDialog,
@@ -80,17 +81,16 @@ function ExistingFeedbackEditor({ studentId, item, onDeleted }: {
       onClick={(event) => { if (item.canEdit && !(event.target instanceof HTMLButtonElement)) textareaRef.current?.focus(); }}
     >
       <form action={editAction}>
-        <textarea
+        <AutoResizeTextarea
           ref={textareaRef}
           name="body"
           required
           readOnly={!item.canEdit}
           maxLength={10000}
-          rows={2}
           value={body}
           onChange={(event) => setBody(event.target.value)}
           aria-label={`${item.authorName} 피드백 내용`}
-          className="min-h-16 w-full resize-y border-0 bg-transparent p-0 leading-7 outline-none read-only:resize-none"
+          className="w-full border-0 bg-transparent p-0 leading-7 outline-none"
         />
         {editState.status !== "idle" ? <p role={editState.status === "error" ? "alert" : "status"} className={`mt-2 text-sm font-bold ${editState.status === "error" ? "text-rose-800" : "text-[var(--accent-strong)]"}`}>{editState.message}</p> : null}
         {item.canEdit || item.canDelete ? <div className="mt-2 flex justify-end gap-2">
@@ -121,7 +121,6 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
     const result = await createModalFeedback(lessonId, data.studentId, previousState, formData);
     if (result.status === "success" && result.feedback) {
       setBody("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
       setCreatedItems((current) => [{ ...result.feedback!, canEdit: true, canDelete: isOwner }, ...current.filter((item) => item.id !== result.feedback!.id)]);
     }
     return result;
@@ -138,14 +137,6 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
     requestAnimationFrame(() => textareaRef.current?.focus());
     return () => { document.body.style.overflow = previousBodyOverflow; };
   }, []);
-
-  function resizeTextarea(value: string) {
-    setBody(value);
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }
 
   function requestClose() {
     if (body.length > 0 && !window.confirm("작성 중인 피드백이 있습니다. 저장하지 않고 닫으시겠습니까?")) return;
@@ -180,17 +171,16 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
               ) : null}
               {isOwner && authorOptions.length === 1 ? <input type="hidden" name="author_staff_id" value={authorOptions[0].id} /> : null}
               <label htmlFor="new-modal-feedback-body" className="sr-only">새 피드백 내용</label>
-              <textarea
+              <AutoResizeTextarea
                 ref={textareaRef}
                 id="new-modal-feedback-body"
                 name="body"
                 required
                 maxLength={10000}
-                rows={4}
                 value={body}
-                onChange={(event) => resizeTextarea(event.target.value)}
+                onChange={(event) => setBody(event.target.value)}
                 placeholder="피드백 내용을 입력하세요"
-                className="max-h-72 min-h-32 w-full resize-none overflow-y-auto rounded-xl border border-[var(--line)] p-3 leading-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                className="w-full rounded-xl border border-[var(--line)] p-3 leading-7 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
               />
               {state.status !== "idle" ? <p role={state.status === "error" ? "alert" : "status"} className={`rounded-xl px-4 py-3 text-sm font-bold ${state.status === "error" ? "border border-rose-200 bg-rose-50 text-rose-900" : "border border-emerald-200 bg-emerald-50 text-emerald-900"}`}>{state.message}</p> : null}
               <SaveButton />

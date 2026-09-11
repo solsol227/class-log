@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { StudentGoalCard } from "./student-goal-card";
 
 type StudentSchedulePageProps = {
   searchParams: Promise<{ month?: string }>;
@@ -64,7 +65,8 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
   const { month } = await searchParams;
   const selectedMonth = month && MONTH_PATTERN.test(month) ? month : null;
   const supabase = await createSupabaseServerClient();
-  const [assignmentsResult, allowancesResult, programsResult] = await Promise.all([
+  const [studentResult, assignmentsResult, allowancesResult, programsResult] = await Promise.all([
+    supabase.from("students").select("goal").maybeSingle(),
     supabase.from("lesson_assignments").select("lesson_id, student_program_id").is("unassigned_at", null),
     supabase.rpc("get_my_student_program_allowance_statuses"),
     supabase.from("student_programs").select("id, program_type"),
@@ -72,8 +74,8 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
   const assignments = assignmentsResult.data ?? [];
   const allowanceStatuses = (allowancesResult.data ?? []) as StudentAllowanceStatus[];
 
-  if (assignmentsResult.error || allowancesResult.error || programsResult.error) {
-    throw new Error("일정과 이용 횟수를 불러오지 못했습니다.", { cause: assignmentsResult.error ?? allowancesResult.error ?? programsResult.error });
+  if (studentResult.error || assignmentsResult.error || allowancesResult.error || programsResult.error) {
+    throw new Error("일정과 이용 횟수를 불러오지 못했습니다.", { cause: studentResult.error ?? assignmentsResult.error ?? allowancesResult.error ?? programsResult.error });
   }
 
   const lessonIds = assignments.map((assignment) => assignment.lesson_id);
@@ -131,22 +133,27 @@ export default async function StudentSchedulePage({ searchParams }: StudentSched
         <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">내 일정</h1>
       </header>
 
-      {visibleAllowances.length > 0 ? (
-        <section aria-labelledby="student-allowance-heading" className="mt-7 rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6">
-          <h2 id="student-allowance-heading" className="text-xl font-bold">내 이용권</h2>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-            {visibleAllowances.map((status) => (
-              <li key={`${status.student_program_id}-${status.period_month ?? "enrollment"}`} className="rounded-xl bg-[#f4f8f7] p-4">
-                <div className="flex items-center justify-between gap-3"><p className="font-bold">{PROGRAM_LABELS[status.program_type] ?? status.program_type}</p><p className="font-bold text-[var(--accent-strong)]">남은 횟수 {status.remaining_count ?? "미설정"}회</p></div>
-                <p className="mt-2 text-sm text-[var(--muted)]">예약 {status.reserved_count} · 사용 {status.used_count}</p>
-                {status.makeup_available_count > 0 || status.makeup_reserved_count > 0 ? (
-                  <p className="mt-1 text-sm text-[var(--muted)]">보강 대기 {status.makeup_available_count} · 예정 {status.makeup_reserved_count}</p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      <section aria-labelledby="student-allowance-heading" className="mt-7 rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6">
+        <h2 id="student-allowance-heading" className="text-xl font-bold">내 이용권</h2>
+        <div className="mt-4 grid items-start gap-4 md:grid-cols-2">
+          {visibleAllowances.length > 0 ? (
+            <ul className="grid gap-3">
+              {visibleAllowances.map((status) => (
+                <li key={`${status.student_program_id}-${status.period_month ?? "enrollment"}`} className="rounded-xl bg-[#f4f8f7] p-4">
+                  <div className="flex items-center justify-between gap-3"><p className="font-bold">{PROGRAM_LABELS[status.program_type] ?? status.program_type}</p><p className="font-bold text-[var(--accent-strong)]">남은 횟수 {status.remaining_count ?? "미설정"}회</p></div>
+                  <p className="mt-2 text-sm text-[var(--muted)]">예약 {status.reserved_count} · 사용 {status.used_count}</p>
+                  {status.makeup_available_count > 0 || status.makeup_reserved_count > 0 ? (
+                    <p className="mt-1 text-sm text-[var(--muted)]">보강 대기 {status.makeup_available_count} · 예정 {status.makeup_reserved_count}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-xl bg-[#f4f8f7] p-4 text-sm text-[var(--muted)]">현재 표시할 이용권이 없습니다.</p>
+          )}
+          <StudentGoalCard initialGoal={studentResult.data?.goal ?? null} />
+        </div>
+      </section>
 
       {months.length > 0 ? (
         <nav aria-label="일정 월 필터" className="mt-7 flex flex-wrap gap-2">

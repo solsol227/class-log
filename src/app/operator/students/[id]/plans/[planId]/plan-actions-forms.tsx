@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import {
   addActivityItems,
   publishMonthlyPlan,
@@ -56,10 +57,9 @@ export function ActivityItemsForm({
             className="mt-2 h-12 w-full rounded-xl border border-[#9badaa] bg-white px-4 outline-none focus:border-[var(--accent)]"
           />
           <label htmlFor={`item-description-${index}`} className="mt-4 block text-sm font-bold">설명 (선택)</label>
-          <textarea
+          <AutoResizeTextarea
             id={`item-description-${index}`}
             name="item_description"
-            rows={3}
             className="mt-2 w-full rounded-xl border border-[#9badaa] bg-white px-4 py-3 outline-none focus:border-[var(--accent)]"
           />
         </fieldset>

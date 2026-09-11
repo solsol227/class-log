@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import { createLesson, type LessonCreateActionState } from "../actions";
 
 const INITIAL_STATE: LessonCreateActionState = { fieldErrors: {} };
@@ -112,10 +113,9 @@ export function LessonCreateForm({ studentId }: { studentId: string }) {
         <label htmlFor="notes" className="mb-2 block text-sm font-bold">
           메모 (선택)
         </label>
-        <textarea
+        <AutoResizeTextarea
           id="notes"
           name="notes"
-          rows={5}
           defaultValue={state.values?.notes}
           className="w-full rounded-xl border border-[#9badaa] bg-white px-4 py-3 text-base outline-none transition focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4]"
         />

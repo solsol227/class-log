@@ -25,6 +25,7 @@
 - `phone`
 - `acquisition_source`
 - `joined_month`
+- `goal text` nullable, 최대 1000자
 - `special_notes`
 - timestamps
 
@@ -37,6 +38,8 @@
 - `daangn`
 - `referral`
 - `naver`
+
+`goal` 조회는 기존 `students` RLS를 따른다. owner는 조회·수정, staff는 조회, student는 자기 row 조회만 가능하다. owner의 `save_student_profile`은 목표를 기본정보와 함께 저장하되 프로그램 저장 transaction과는 계속 분리한다. student 수정은 `update_my_student_goal(text)` SECURITY DEFINER RPC만 사용한다. RPC는 JWT student 역할과 `private.current_student_id()`를 함께 확인하고 현재 학생의 `goal` 한 필드만 변경하므로 students row UPDATE 권한을 넓히지 않는다.
 
 ## 2. 학생 프로그램
 
@@ -87,6 +90,7 @@ PR24에서는 `save_student_profile`과 `save_student_programs` RPC로 저장 �
 - 이용종료: active enrollment가 없고 가장 최근 stopped 이용기간이 `ended` 또는 `other`. 프로그램 이력이 없는 학생도 목록에서 누락되지 않도록 이 탭에 포함하되 `프로그램 미등록` 배지를 표시한다.
 - 프로그램 필터: active enrollment가 있으면 현재 active 프로그램, 없으면 가장 최근 stopped 이용기간의 프로그램을 기준으로 판정한다.
 - 검색어·상태·프로그램 필터는 URL query로 함께 유지한다.
+- 학생 목록의 현재 active enrollment 잔여 횟수는 `student_program_allowance_statuses`를 목록 단위 한 번의 query로 읽는다. 월 이용권은 KST 현재 월, 체험·대여는 enrollment 전체 period만 표시하며 stopped 이력과 미설정 횟수는 현재 잔여 횟수로 만들지 않는다.
 
 ## 3. 일정
 

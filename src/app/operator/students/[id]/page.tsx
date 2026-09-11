@@ -44,7 +44,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
   const supabase = await createSupabaseServerClient();
   const { data: student, error } = await supabase
     .from("students")
-    .select("id, nickname, gender, age, phone, acquisition_source, joined_month, special_notes")
+    .select("id, nickname, gender, age, phone, acquisition_source, joined_month, goal, special_notes")
     .eq("id", id)
     .maybeSingle();
   if (error || !student) {
@@ -95,6 +95,7 @@ export default async function OperatorStudentDetailPage({ params, searchParams }
           phone: student.phone,
           acquisitionSource: student.acquisition_source,
           joinedMonth: student.joined_month,
+          goal: student.goal,
           specialNotes: student.special_notes,
         }} />
       </div>

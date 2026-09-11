@@ -17,6 +17,7 @@ const PHONE_PATTERN = /^010[0-9]{8}$/;
 
 type ProfileFieldErrors = {
   name?: string;
+  goal?: string;
   gender?: string;
   age?: string;
   acquisitionSource?: string;
@@ -82,9 +83,14 @@ export async function configureRentalAllowance(studentId: string, studentProgram
 const PROGRAM_TYPES = ["weekday_vocal", "weekend_vocal", "rental", "trial"] as const;
 const STOP_REASONS = ["break", "ended", "other"] as const;
 const ACQUISITION_SOURCES = ["instagram", "daangn", "referral", "naver"] as const;
+const GOAL_MAX_LENGTH = 1000;
 
 function optionalText(value: FormDataEntryValue | null) {
   return String(value ?? "").trim() || null;
+}
+
+function optionalMultilineText(value: FormDataEntryValue | null) {
+  return String(value ?? "").replace(/\r\n/g, "\n").trim() || null;
 }
 
 function isValidDate(value: string) {
@@ -193,6 +199,7 @@ export async function updateStudentProfile(
   const acquisitionSource = optionalText(formData.get("acquisition_source"));
   const joinedMonthInput = String(formData.get("joined_month") ?? "").trim();
   const specialNotes = optionalText(formData.get("special_notes"));
+  const goal = optionalMultilineText(formData.get("goal"));
   let name = "";
 
   try {
@@ -218,6 +225,9 @@ export async function updateStudentProfile(
   }
   if (acquisitionSource && !ACQUISITION_SOURCES.includes(acquisitionSource as (typeof ACQUISITION_SOURCES)[number])) {
     fieldErrors.acquisitionSource = "유입경로를 다시 선택해 주세요.";
+  }
+  if (goal && goal.length > GOAL_MAX_LENGTH) {
+    fieldErrors.goal = `목표는 ${GOAL_MAX_LENGTH}자 이하로 입력해 주세요.`;
   }
 
   let joinedMonth: string | null = null;
@@ -302,6 +312,7 @@ export async function updateStudentProfile(
       profile_acquisition_source: acquisitionSource,
       profile_joined_month: joinedMonth,
       profile_special_notes: specialNotes,
+      profile_goal: goal,
     },
   );
 

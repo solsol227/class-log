@@ -1,6 +1,15 @@
 # Class Log 개발 기록
 
-## 2026-09-11 — Codex — PR36 직원 담당 일정 월간 캘린더
+## 2026-09-12 — Codex — PR36 학생 목표·프로필·잔여 횟수 UX
+
+- 기준: PR34 compact UX와 PR35 직원 캘린더가 병합된 최신 `origin/main` `c5b3b08`에서 clean `feat/student-goals-and-summary` 브랜치를 만들었다. 작업 전 local/remote migration 38개 일치를 확인했다.
+- 구현: nullable `students.goal`과 1000자 제약을 append-only migration으로 추가하고, 학생 등록·owner 프로필 편집·학생 내 일정의 이용권 대시보드에 연결했다. 학생 목표는 빈 상태에서 `나만의 목표를 설정해볼까요?`를 안내하고 한 줄 자동 확장 입력과 `수정` 버튼으로 저장한다. 학생정보 보기·편집의 중복 제목과 기본 설명을 제거하고 목표·특이사항을 이름 아래 compact 정보 행으로 정리했다.
+- 권한: 기존 students RLS로 owner/staff 조회와 student 자기 row 조회를 유지한다. owner는 `save_student_profile`, student는 대상 ID를 받지 않는 `update_my_student_goal` 전용 RPC로 같은 컬럼을 수정한다. 학생 RPC는 JWT 역할과 `private.current_student_id()`를 확인하고 goal만 갱신하며 staff/owner의 학생 위장 호출과 anon 실행을 차단한다.
+- 목록: 기존 `student_program_allowance_statuses`를 학생 목록 전체에 한 번 조회해 active enrollment의 KST 현재 월 또는 enrollment 전체 잔여 횟수만 표시한다. stopped 이력과 미설정 횟수는 제외하며 학생별 query나 신규 RPC는 없다.
+- textarea: 공통 `AutoResizeTextarea`가 한 줄에서 최대 9줄까지 확장하고 이후 내부 스크롤을 사용한다. controlled/default value, form reset, 숨김·modal 재노출을 재계산하며 목표·특이사항·일정/출결 메모·피드백/댓글·보강 사유/완료 메모·월간 계획 입력에 적용했다. 날짜·시간·검색·중단 사유 select·횟수 조정 사유 input은 변경하지 않았다.
+- 검증: 합성 in-memory DB에서 40개 migration과 owner/staff/student A·B/anon을 포함한 139개 assertion, ESLint, TypeScript, production build와 diff check를 통과했다. 두 번째 append-only migration 적용 후 local/remote 40개 이력이 일치하며 private DB lint는 깨끗하고 public은 기존 미사용 변수 경고 1건뿐이다. 실제 owner/student 로그인·목표 조회·학생 목표 RPC의 비변경 초과 입력 거부·운영자 학생 목록·학생 목표 대시보드 SSR과 보호 화면 HTTP 200·비인증 401도 통과했다. 사용자 데이터 mutation과 테스트 학생 생성 없이 production 브라우저 로그인 후 목표 대시보드의 조회·입력·저장·연동을 사용자가 직접 확인했다.
+
+## 2026-09-11 — Codex — PR35 직원 담당 일정 월간 캘린더
 
 - 기준: PR33 병합 커밋 `f21ddac`와 일치하는 최신 `origin/main`에서 별도 `feat/staff-schedule-calendar` worktree를 만들었으며, 원본과 작업 tree가 clean인 상태에서 시작했다.
 - 구현: 직원 상세의 지난 일정 목록을 제거하고 KST 현재 월 기반 compact 예정 카드와 6주 월간 캘린더로 교체했다. 이전·다음 달, native month picker, `month=YYYY-MM` URL 유지·복구, 모바일 캘린더 우선 순서, 일별 2건 뒤 `+N` 전체 보기를 제공한다.

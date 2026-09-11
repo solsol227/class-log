@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import {
   saveAttendance,
   type AttendanceActionState,
@@ -116,10 +117,9 @@ export function AttendanceForm({
         <label htmlFor="attendance-memo" className="mb-2 block text-sm font-bold">
           메모 (선택)
         </label>
-        <textarea
+        <AutoResizeTextarea
           id="attendance-memo"
           name="memo"
-          rows={4}
           maxLength={1000}
           defaultValue={memo}
           aria-invalid={Boolean(state.fieldErrors.memo)}

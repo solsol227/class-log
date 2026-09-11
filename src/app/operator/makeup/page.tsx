@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -227,12 +228,11 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
                       <Link href="/operator/schedules/new" className="mt-2 block text-center text-sm font-bold underline">새 일정 생성</Link>
                       <form action={completeMakeupWithoutSchedule.bind(null, item.id)} className="mt-4 space-y-2 border-t border-[var(--line)] pt-4">
                         <label className="block text-sm font-bold" htmlFor={`complete-note-${item.id}`}>일정 없이 완료</label>
-                        <textarea
+                        <AutoResizeTextarea
                           id={`complete-note-${item.id}`}
                           name="completion_note"
-                          rows={2}
                           maxLength={500}
-                          className="w-full rounded-lg border px-3 py-2 text-sm"
+                          className="w-full rounded-lg border px-3 py-2 text-sm leading-6"
                           placeholder="선택 메모"
                         />
                         <button className="h-10 w-full rounded-lg border font-bold">일정 없이 완료</button>
