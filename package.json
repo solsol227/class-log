@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "tsc --noEmit --incremental false",
+    "verify:login": "node scripts/verify-local-login.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

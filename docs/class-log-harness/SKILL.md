@@ -89,6 +89,16 @@ DB, RLS, migration, Postgres function 작업이라면 추가로 `docs/compound/s
 - 마지막 전체 검증 이후 코드가 변경됐다면 변경 영향에 필요한 검증만 다시 수행한다.
 - Git 마무리 직전에는 최종 검증 결과가 최신 코드 기준인지 확인한다.
 
+### 기능 단위 완료 시 검증 순서
+
+1. `npm run lint:fix`를 단독 실행하고 자동 수정된 diff를 확인한다.
+2. 자동 수정이 끝난 같은 코드 기준으로 `npm run lint`, `npm run typecheck`, `git diff --check`를 병렬 실행한다.
+3. 병렬 검사 하나가 실패해도 나머지를 취소하지 않고 결과를 모두 모아 한 번에 수정한다.
+4. 위 검사 프로세스가 모두 끝나면 `npm run build`를 실행한다.
+5. 수정 후에는 실패한 검사와 변경 영향에 필요한 검사만 다시 실행하고, 최종 코드 기준 결과를 확인한다.
+
+`lint:fix`는 파일을 변경하므로 다른 검사와 동시에 실행하지 않는다. TypeScript 검사와 production build는 모두 `.next`의 생성 타입을 읽거나 갱신할 수 있으므로 동시에 실행하지 않는다. ESLint, TypeScript, diff 검사는 서로의 결과를 기다릴 필요가 없어 병렬로 결과를 수집한다.
+
 ### 개발 중 검증
 
 개발 도중에는 가능한 한 빠르고 좁은 검증을 우선한다.
@@ -140,6 +150,8 @@ DB, RLS, migration, Postgres function 작업이라면 추가로 `docs/compound/s
 - mock/dev preview 결과를 로그인, 권한, RLS, 저장, DB mutation, 실제 일정관리 동작 검증으로 간주하지 않는다.
 - 환경 문제로 브라우저 자동화가 막히면 production 서버와 사용자 테스트 URL을 제공하고 사용자가 직접 확인하도록 한다.
 - 최종 검증에서 로그인/권한/보호 화면 흐름이 관련되면 실제 operator/student 계정 흐름과 `node scripts/verify-local-login.mjs` 같은 로컬 로그인 검증을 사용한다.
+- 로그인 폼, Auth client/server action, 쿠키, role 판별, Supabase 공개 환경변수, proxy 또는 보호 layout을 변경한 작업은 production build와 서버를 같은 환경변수로 실행한 뒤 `npm run verify:login`이 통과해야 완료로 판단한다. 운영자와 학생 중 하나만 확인하거나 직접 Supabase 로그인 성공만 확인한 상태로 완료를 보고하지 않는다.
+- `npm run verify:login`의 필수 성공 기준은 운영자·학생 각각의 실제 `loginWithPassword` 서버 액션 200 응답, 역할별 destination, `Set-Cookie`, 역할 API 200, 보호 화면 200 및 비인증 역할 API 401이다. 실패를 일반 lint/build 성공으로 대체하지 않는다.
 - 사용자 데이터나 실제 DB 데이터를 변경하는 검증은 명시적 허용 없이 수행하지 않는다.
 
 ### 작업 중 새 문제 발견

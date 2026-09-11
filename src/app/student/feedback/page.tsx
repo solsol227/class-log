@@ -11,9 +11,10 @@ import {
   STUDENT_FEEDBACK_LIMIT,
 } from "@/lib/feedback/student-feedback";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { InstantFeedbackSort } from "./instant-feedback-sort";
 
 type StudentFeedbackPageProps = {
-  searchParams: Promise<{ range?: string; from?: string; to?: string; sort?: string }>;
+  searchParams: Promise<{ range?: string; sort?: string }>;
 };
 
 const RANGE_OPTIONS = [
@@ -27,13 +28,14 @@ function formatLessonDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeZone: "Asia/Seoul" }).format(new Date(value));
 }
 
-function formatFeedbackDate(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(value));
-}
-
 export default async function StudentFeedbackPage({ searchParams }: StudentFeedbackPageProps) {
   await requireAuthenticatedUser("/login/student", "student");
-  const parsed = parseFeedbackArchiveQuery(await searchParams);
+  const rawQuery = await searchParams;
+  const allowedRange = RANGE_OPTIONS.some((option) => option.value === rawQuery.range);
+  const parsed = parseFeedbackArchiveQuery({
+    range: rawQuery.range === undefined || allowedRange ? rawQuery.range : "invalid",
+    sort: rawQuery.sort,
+  });
   const supabase = await createSupabaseServerClient();
 
   let lessonsQuery = supabase
@@ -78,38 +80,23 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
     if (lessonDifference !== 0) return lessonDifference;
     return left.created_at.localeCompare(right.created_at) * (parsed.sort === "asc" ? 1 : -1);
   });
+  const feedbackReturnPath = feedbackArchiveHref(parsed.range === "custom" ? "all" : parsed.range, parsed.sort);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
       <header>
         <p className="text-sm font-bold tracking-[0.12em] text-[var(--accent-strong)]">클래스로그</p>
         <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em] sm:text-4xl">내 피드백</h1>
-        <p className="mt-3 text-[var(--muted)]">수업별 공식 피드백을 확인하세요.</p>
+        <p className="mt-3 text-[var(--muted)]">수업별 피드백을 확인하세요.</p>
       </header>
 
-      <section className="mt-7 rounded-2xl border border-[var(--line)] bg-white p-4 sm:p-5" aria-labelledby="feedback-filters">
-        <h2 id="feedback-filters" className="text-lg font-bold">기간과 정렬</h2>
-        <nav aria-label="피드백 빠른 기간 선택" className="mt-4 flex flex-wrap gap-2">
+      <section className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" aria-label="피드백 필터">
+        <nav aria-label="피드백 빠른 기간 선택" className="flex flex-wrap gap-2">
           {RANGE_OPTIONS.map((option) => (
             <Link key={option.value} href={feedbackArchiveHref(option.value, parsed.sort)} aria-current={parsed.range === option.value ? "page" : undefined} className={`inline-flex min-h-11 items-center rounded-xl border px-4 font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${parsed.range === option.value ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--line)] hover:border-[var(--accent)]"}`}>{option.label}</Link>
           ))}
         </nav>
-
-        <form method="get" className="mt-5 grid gap-3 border-t border-[var(--line)] pt-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <input type="hidden" name="range" value="custom" />
-          <input type="hidden" name="sort" value={parsed.sort} />
-          <label className="grid gap-2 text-sm font-bold">시작일<input type="date" name="from" required defaultValue={parsed.range === "custom" ? parsed.from ?? "" : ""} className="min-h-11 rounded-xl border border-[var(--line)] px-3 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]" /></label>
-          <label className="grid gap-2 text-sm font-bold">종료일<input type="date" name="to" required defaultValue={parsed.range === "custom" ? parsed.to ?? "" : ""} className="min-h-11 rounded-xl border border-[var(--line)] px-3 font-normal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]" /></label>
-          <button className="min-h-11 rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">기간 적용</button>
-        </form>
-
-        <form method="get" className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input type="hidden" name="range" value={parsed.range} />
-          {parsed.range === "custom" ? <><input type="hidden" name="from" value={parsed.from ?? ""} /><input type="hidden" name="to" value={parsed.to ?? ""} /></> : null}
-          <label htmlFor="feedback-sort" className="text-sm font-bold">정렬</label>
-          <select id="feedback-sort" name="sort" defaultValue={parsed.sort} className="min-h-11 rounded-xl border border-[var(--line)] bg-white px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"><option value="desc">최신 수업순</option><option value="asc">오래된 수업순</option></select>
-          <button className="min-h-11 rounded-xl bg-[var(--foreground)] px-4 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">정렬 적용</button>
-        </form>
+        <InstantFeedbackSort range={parsed.range === "custom" ? "all" : parsed.range} sort={parsed.sort} />
       </section>
 
       {parsed.error ? <p role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 font-semibold text-amber-900">{parsed.error}</p> : null}
@@ -120,21 +107,24 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
             const lesson = lessonById.get(item.lesson_id);
             if (!lesson) return null;
             const author = feedbackAuthors.get(item.id);
+            const detailHref = `/student/schedule/${lesson.id}?returnTo=${encodeURIComponent(feedbackReturnPath)}#feedback-${item.id}`;
             return (
               <li key={item.id}>
-                <article className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-7">
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="rounded-lg bg-[#e5f2f0] px-2.5 py-1 font-bold text-[var(--accent-strong)]">{PROGRAM_LABELS[lessonPrograms.get(lesson.id) ?? ""] ?? "이용권 확인 중"}</span>
-                    <time className="font-bold text-[var(--accent-strong)]" dateTime={lesson.starts_at}>{formatLessonDate(lesson.starts_at)}</time>
-                  </div>
-                  <h2 className="mt-3 text-xl font-bold tracking-[-0.02em]">{lesson.title}</h2>
-                  <p className="mt-2 text-sm text-[var(--muted)]">{author ? `${author.display_name} · ${STAFF_ROLE_LABELS[author.role] ?? author.role}` : "피드백 제공자"} · {formatFeedbackDate(item.created_at)}</p>
-                  <p className="mt-5 whitespace-pre-wrap break-words text-[1.05rem] leading-8">{item.body}</p>
-                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
-                    <span className="text-sm font-semibold text-[var(--muted)]">댓글 {commentCounts.get(item.id) ?? 0}개</span>
-                    <Link href={`/student/schedule/${lesson.id}#feedback-${item.id}`} className="inline-flex min-h-11 items-center rounded-xl border border-[var(--accent)] px-4 font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">일정에서 대화 보기 <span aria-hidden="true" className="ml-1">→</span></Link>
-                  </div>
-                </article>
+                <Link href={detailHref} className="block rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">
+                  <article className="rounded-2xl border border-[var(--line)] bg-white p-4 transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-[0_14px_35px_rgba(23,64,60,0.09)] active:bg-[#f4f8f7] sm:p-5">
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-[#e5f2f0] px-2.5 py-1 font-bold text-[var(--accent-strong)]">{PROGRAM_LABELS[lessonPrograms.get(lesson.id) ?? ""] ?? "이용권 확인 중"}</span>
+                        <time className="font-bold text-[var(--accent-strong)]" dateTime={lesson.starts_at}>{formatLessonDate(lesson.starts_at)}</time>
+                      </div>
+                      <span className="inline-flex min-h-8 shrink-0 items-center font-bold text-[var(--accent-strong)]">상세보기 <span aria-hidden="true" className="ml-1">→</span></span>
+                    </div>
+                    <h2 className="mt-2 text-lg font-bold tracking-[-0.02em]">{lesson.title}</h2>
+                    <p className="mt-1 text-sm text-[var(--muted)]">{author ? `${author.display_name} · ${STAFF_ROLE_LABELS[author.role] ?? author.role}` : "피드백 제공자"}</p>
+                    <p className="mt-4 whitespace-pre-wrap break-words leading-7">{item.body}</p>
+                    <p className="mt-2 text-sm font-semibold text-[var(--muted)]">댓글 {commentCounts.get(item.id) ?? 0}개</p>
+                  </article>
+                </Link>
               </li>
             );
           })}
