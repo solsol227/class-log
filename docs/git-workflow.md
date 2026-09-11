@@ -91,13 +91,27 @@ git diff --check
 
 # 4. 검증
 
-변경 성격에 맞게 최소 다음을 실행한다.
+기능 단위 구현이 끝나면 먼저 자동 수정 가능한 ESLint 문제를 정리한다.
+
+```bash
+npm run lint:fix
+```
+
+자동 수정 diff를 확인한 뒤, 같은 코드 기준으로 다음 세 검사를 병렬 실행한다. 하나가 실패해도 다른 검사를 중단하지 않고 결과를 모두 수집한다.
 
 ```bash
 npm run lint
-npm run build
+npm run typecheck
 git diff --check
 ```
+
+세 검사가 모두 종료된 뒤 production build를 실행한다.
+
+```bash
+npm run build
+```
+
+`lint:fix`는 파일을 변경하므로 검사들과 동시에 실행하지 않는다. TypeScript 검사와 production build는 `.next` 생성 타입을 함께 다룰 수 있어 서로 겹쳐 실행하지 않는다. 작은 수정마다 전체 절차를 반복하지 않고, 기능 단위 완료와 Git 마무리 시점에 최신 코드 기준 결과를 확인한다.
 
 Supabase schema 변경 시:
 
@@ -108,6 +122,14 @@ supabase db lint
 도 실행한다.
 
 RLS/DB 변경은 lint만으로 끝내지 않고 실제 operator/student 시나리오를 확인한다.
+
+로그인, Auth, 쿠키, 역할 판별, Supabase 공개 환경변수 또는 보호 화면 경계를 변경했다면 production 서버를 실행한 상태에서 다음 검사를 반드시 통과시킨다.
+
+```bash
+npm run verify:login
+```
+
+이 검사는 실제 테스트 운영자·학생의 로그인 서버 액션, 인증 쿠키, 역할별 이동, 역할 API, 보호 화면과 비인증 거부를 함께 검증한다. 한 역할만 성공하거나 Supabase SDK 직접 로그인만 성공한 결과로 대체하지 않는다.
 
 ---
 

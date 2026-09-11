@@ -8,6 +8,17 @@
 - 표시·접근성: 같은 날 일정은 날짜를 한 번만 표시하고 날짜가 넘어갈 때만 종료 날짜를 반복한다. 학생은 데스크톱 첫 3명, 모바일 첫 2명 뒤 `외 N명`으로 줄이며 캘린더 항목은 시간·active 학생 수를 표시한다. 제목·시간·인원·상태는 링크 접근성 이름과 tooltip에 유지하고 상태별 점과 텍스트 범례를 함께 제공한다.
 - 검증: 변경 파일 ESLint, `tsc --noEmit --incremental false`, production build, 실제 owner/student 로그인·역할 API·보호 화면과 비인증 401을 통과했다. 실제 owner 세션으로 직원 캘린더 200, month 누락·오류의 현재 월 307 복구를 read-only 확인했으며 사용자 production UI 확인은 대기 중이다.
 
+## 2026-09-11 — Codex — PR34 일정 및 학생 피드백 Compact UX
+
+- 한 일: 운영자 일정 카테고리·상태 필터를 데스크톱 한 줄로 배치하고 학생 일정 카드, 일정 상세 4항목 정보, 내 피드백 필터·카드를 압축했다. 일정/피드백 목록의 유효 query를 제한된 내부 `returnTo`로 보존하며 외부·임의 경로는 일정 목록으로 복구한다.
+- 피드백: 학생 일정 상세에서 수업 날짜·일정명·제공 직원·본문·댓글 수를 표시하고 기존 공용 댓글/답글 thread를 그대로 사용한다. 내 피드백은 직접 기간 입력을 제거하고 빠른 기간 버튼과 즉시 정렬만 제공한다.
+- modal: dialog와 내부 article이 함께 스크롤하던 중첩 구조를 dialog 단일 scroll로 바꾸고, 열린 동안 배경 body scroll을 잠근다. 새 피드백 textarea는 최대 높이 이후에만 자체 스크롤한다.
+- 데이터: DB schema, migration, RLS, query 의미와 사용자 데이터는 변경하지 않았다. 신규 테스트 데이터도 만들지 않았다.
+- 검증: ESLint, `tsc --noEmit --incremental false`, production build, `git diff --check`를 통과했다. 실제 테스트 owner/student 로그인, 역할 API, 운영 일정, 학생 일정·피드백 HTTP 200과 학생 RLS Draft 비노출을 확인했다. 테스트 학생에게 배정된 일정이 없어 상세의 양성 HTTP 검증은 남았고, 브라우저 플러그인도 로컬 webview attach timeout으로 자동 화면 검증을 수행하지 못해 사용자 확인이 필요하다.
+- 로그인 후속 수정: 서버·Supabase Auth·로컬 Origin CORS와 production 번들 공개 설정은 정상인데 브라우저 webview의 직접 Auth 요청에서만 owner/student가 함께 실패했다. 브라우저가 Supabase에 직접 연결하는 방식을 Next server action 경유 로그인으로 전환하고, 서버에서 claims·역할·operator 활성 상태를 재검증하도록 했다. 비밀번호는 저장하거나 로그에 남기지 않는다.
+- 로그인 재수정: 최초 server action 구현은 로그인 직후 같은 요청의 cookie store에서 새 토큰을 다시 읽어 claims를 검사해, 아직 갱신되지 않은 cookie snapshot 때문에 정상 계정도 일시 오류가 될 수 있었다. `signInWithPassword`가 반환한 access token을 직접 검증하고 같은 토큰의 authenticated client로 운영자 context를 확인하도록 변경했다.
+- Compact UX 재수정: 학생 일정 상세 4항목은 breakpoint와 관계없이 한 행을 유지하고 좁은 화면에서는 해당 정보 행만 가로 스크롤한다. 내 피드백 카드의 문구를 `상세보기`로 통일하고 카드 전체를 상세 링크로 만들었다. 운영자 일정 카테고리·상태 그룹은 데스크톱 2열로 나란히 두고, 각 그룹의 제목은 선택지 위에 왼쪽 정렬한다.
+
 ## 2026-09-11 — Codex — PR33 학생 상세 UX와 피드백 단일 상태
 
 - 기준: 최신 `origin/main` `1e07d7f34a7dfe65f46c2d102ee55d28c68a3a14`에서 `feat/student-detail-ux`를 생성했다. PR31·PR32 병합을 확인했으며 기존 migration은 수정하지 않았다.
@@ -253,3 +264,10 @@
 - 최종 확인: ESLint, `tsc --noEmit --incremental false`, production build, `git diff --check`를 통과했다. 적용 직전 원격 33개 migration과 단일 dry-run 대상을 재확인한 뒤 사용자 승인으로 `20260908230000_add_staff_operator_accounts.sql`만 적용했다. 적용 후 local/remote 34개 이력 일치, public/private/extensions DB lint 무경고다. 기존 owner 이메일 로그인·owner context·운영 일정 HTTP 200과 기존 학생 로그인·학생 일정 HTTP 200, 비인증 role 요청 401을 production 서버에서 확인했다. 일정 hard delete·Draft 빠른 확정 branch는 수정하거나 병합하지 않았다.
 - 브라우저 검증 환경 보완: 별도 worktree의 production build에 Git 제외 파일인 `.env.local`이 없어 브라우저 번들에 공개 Supabase 설정이 포함되지 않았고, 로그인 폼이 네트워크 요청 전에 `일시적인 오류`를 표시했다. 원본 checkout의 환경변수를 값 출력 없이 build와 start 프로세스 모두에 전달해 재빌드했다. 합성된 존재하지 않는 계정이 `입력한 계정 정보가 올바르지 않습니다`로 응답하는 것과 실제 테스트 owner/student 로그인·역할 API·보호 화면 200을 확인했다. 재발 방지 절차는 `docs/class-log-harness/SKILL.md`와 README에 기록했다.
 - 사용자 브라우저 확인: 실제 staff 계정 생성·로그인·로그인 중지 흐름을 사용자가 확인했다. PR30의 브라우저 확인 항목을 완료 처리했으며 비밀번호나 공개 환경변수 값은 기록하지 않았다.
+
+## 2026-09-11 — Codex — 로그인 회귀 검증 완료 조건 강화
+
+- 원인 교정: 브라우저 직접 Auth 호출과 별도 역할 요청을 서버 로그인 액션으로 통합하고, 로그인 직후 역할 판별은 해당 요청에서 발급된 access token을 사용하도록 변경했다.
+- 자동 검증: `npm run verify:login`을 추가해 production build의 실제 운영자·학생 로그인 서버 액션 200, 역할별 목적지, 인증 쿠키, 역할 API와 보호 화면 200, 비인증 401을 한 번에 검사한다.
+- 재발 방지: 로그인/Auth/쿠키/공개 환경변수/proxy/보호 layout 변경은 위 검증 통과 전 완료로 판단하거나 보고하지 않도록 하네스와 Git workflow에 필수 조건으로 기록했다. 직접 Supabase 로그인이나 한 역할만의 성공으로 대체할 수 없다.
+- 확인: 3100 포트의 최신 production 서버에서 새 표준 명령을 실행해 전체 조건을 통과했다. 비밀번호·토큰 출력 및 사용자 데이터 mutation은 없었다.

@@ -10,14 +10,22 @@ Supabase Auth에 접속 가능한 환경에서 production 서버를 실행한 �
 ```powershell
 npm run build
 npm run start -- --hostname 127.0.0.1 --port 3000
-node scripts/verify-local-login.mjs
+npm run verify:login
 node --test src/lib/auth/auth-verification.test.mjs
 ```
 
-첫 테스트는 실제 operator/student 로그인을 통해 브라우저 클라이언트가 만든 쿠키,
-SSR 서명 검증, 로컬 역할 API, 보호 페이지 HTTP 응답 및 비인증 거부를 확인한다.
-브라우저 UI 자동화는 아니며 입력·클릭 동작 자체는 검증하지 않는다.
+첫 테스트는 실제 operator/student 계정으로 production build의 `loginWithPassword`
+서버 액션 응답·역할별 destination·`Set-Cookie`를 확인하고, Supabase 직접 로그인으로
+SSR 서명 검증, 로컬 역할 API, 보호 페이지 HTTP 응답 및 비인증 거부도 확인한다.
+브라우저 UI 자동화는 아니므로 입력·클릭 렌더링은 별도 브라우저 smoke test로 확인한다.
 비밀번호·토큰을 출력하지 않으며 발급한 테스트 세션만 로그아웃한다.
+
+3000 이외의 포트에서는 같은 production 서버 주소를 명시한다.
+
+```powershell
+$env:CLASSLOG_TEST_BASE_URL='http://127.0.0.1:3100'
+npm run verify:login
+```
 
 두 번째 테스트는 Auth 연결 실패·503·429를 주입해 세션 만료로 오인하지 않고
 쿠키를 보존하는지, 유효하지 않은 JWT와 잘못된 역할은 계속 거부하는지 확인한다.

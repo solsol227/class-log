@@ -217,6 +217,18 @@ PR30의 `operator_accounts`를 권한 source of truth로 사용한다. owner만 
 - [ ] 브라우저 CRUD E2E 자동화
 - [ ] 학생 피드백 아카이브 pagination 및 조회 상한 개선 (현재 일정·피드백 200건, 댓글 1,000건)
 
+## 구현 중 — PR34 일정 및 학생 피드백 Compact UX
+
+- [x] 운영자 일정 카테고리·상태 필터 데스크톱 한 줄 배치
+- [x] 학생 일정 카드와 이용권 문구 압축
+- [x] 학생 일정 상세 정보 4항목 반응형 압축
+- [x] 일정·피드백 목록 query를 보존하는 안전한 내부 복귀 경로
+- [x] 일정 상세 피드백 카드와 기존 댓글 thread 재사용
+- [x] 학생 피드백 빠른 기간·즉시 정렬 필터와 카드 압축
+- [x] 피드백 작성 modal 단일 panel scroll과 배경 scroll lock
+- [x] ESLint / TypeScript / production build / diff check
+- [ ] 사용자 production UI 확인
+
 ## 구현·검증 완료 — 중립 lesson과 학생 프로그램 이용권
 
 - [x] `lessons.program_type` 및 exact-match 설계 제거

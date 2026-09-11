@@ -352,7 +352,7 @@ PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 
 
 피드백 제공 직원 표시는 `get_student_feedback_authors(uuid[])`가 담당한다. 이 함수는 `private.student_can_view_feedback()`을 통과한 최대 200개 피드백에 대해서만 `feedback_id`, 직원 등록 이름, 역할을 반환하며 직원 ID나 `auth_user_id`는 반환하지 않는다. 댓글 작성자도 같은 접근 판정을 사용하는 `get_student_feedback_comment_authors(uuid[])`가 댓글 ID와 안전한 표시 이름만 반환한다.
 
-`/student/feedback` 기간 기준은 `lessons.starts_at`의 KST calendar date다. URL은 빠른 기간에 `range=all|1m|3m|6m&sort=asc|desc`, 직접 기간에 `range=custom&from=YYYY-MM-DD&to=YYYY-MM-DD&sort=asc|desc`를 사용한다.
+`/student/feedback` 기간 기준은 `lessons.starts_at`의 KST calendar date다. 학생 화면 URL은 `range=all|1m|3m|6m&sort=asc|desc`를 사용하며 버튼·정렬 변경 즉시 적용한다. 학생 화면의 직접 기간 입력은 제공하지 않고 잘못된 query는 전체·최신순으로 안전하게 정규화한다.
 
 ## 15. 운영자 학생별 피드백 조회와 작성
 
