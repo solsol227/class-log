@@ -12,6 +12,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type StudentCreateFieldErrors = {
   nickname?: string;
+  goal?: string;
   password?: string;
   passwordConfirmation?: string;
 };
@@ -21,11 +22,13 @@ export type StudentCreateActionState = {
   formError?: string;
   values?: {
     nickname: string;
+    goal: string;
   };
 };
 
 const GENERIC_ERROR = "학생을 등록하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 const DUPLICATE_NICKNAME_ERROR = "이미 사용 중인 이름입니다.";
+const GOAL_MAX_LENGTH = 1000;
 
 function isDuplicateAuthUserError(error: { code?: string }) {
   return error.code === "email_exists" || error.code === "user_already_exists";
@@ -38,6 +41,8 @@ export async function createStudent(
   await requireOperatorAccess({ owner: true });
 
   const rawNickname = String(formData.get("nickname") ?? "");
+  const rawGoal = String(formData.get("goal") ?? "").replace(/\r\n/g, "\n");
+  const goal = rawGoal.trim() || null;
   const password = String(formData.get("password") ?? "");
   const passwordConfirmation = String(
     formData.get("password_confirmation") ?? "",
@@ -56,6 +61,10 @@ export async function createStudent(
         : "이름을 확인해 주세요.";
   }
 
+  if (goal && goal.length > GOAL_MAX_LENGTH) {
+    fieldErrors.goal = `목표는 ${GOAL_MAX_LENGTH}자 이하로 입력해 주세요.`;
+  }
+
   if (!password) {
     fieldErrors.password = "비밀번호를 입력해 주세요.";
   } else if (password.length < 8) {
@@ -70,6 +79,7 @@ export async function createStudent(
 
   const values = {
     nickname: rawNickname,
+    goal: rawGoal,
   };
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -126,6 +136,7 @@ export async function createStudent(
     .insert({
       auth_user_id: authData.user.id,
       nickname,
+      goal,
     })
     .select("id")
     .single();

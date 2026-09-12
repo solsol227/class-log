@@ -47,9 +47,38 @@ async function verify(mode, email, password, destination) {
       console.log(mode, 'context', { success: !context.error && !!context.data, code: context.error?.code });
       assert.ifError(context.error);
       assert.equal(context.data?.accessLevel, 'owner');
+      const goals = await server.from('students').select('id, goal').limit(1);
+      assert.ifError(goals.error);
+      const profileProbe = {
+        target_student_id: '00000000-0000-4000-8000-000000000000',
+        profile_nickname: 'permission-probe',
+        profile_gender: null,
+        profile_age: null,
+        profile_phone: null,
+        profile_acquisition_source: null,
+        profile_joined_month: null,
+        profile_special_notes: null,
+        profile_goal: null,
+      };
+      const ownerGoalProbe = await server.rpc('save_student_profile', profileProbe);
+      assert.equal(ownerGoalProbe.error?.code, 'P0002', 'owner profile RPC must reach the missing-row guard');
+      const goalLengthProbe = await server.rpc('save_student_profile', { ...profileProbe, profile_goal: 'x'.repeat(1001) });
+      assert.equal(goalLengthProbe.error?.code, '23514', 'deployed profile RPC must enforce the goal length');
     }
     const paths = ['/api/auth/role', destination];
+    if (mode === 'operator') paths.push('/operator/students');
     if (mode === 'student') {
+      const profile = await server.from('students').select('id, goal');
+      assert.ifError(profile.error);
+      assert.equal(profile.data?.length, 1, 'student must see exactly one own profile row');
+      const deniedGoalUpdate = await server.rpc('save_student_profile', {
+        target_student_id: '00000000-0000-4000-8000-000000000000', profile_nickname: 'permission-probe',
+        profile_gender: null, profile_age: null, profile_phone: null, profile_acquisition_source: null,
+        profile_joined_month: null, profile_special_notes: null, profile_goal: null,
+      });
+      assert.equal(deniedGoalUpdate.error?.code, '42501', 'student profile RPC must be denied before row lookup');
+      const goalLengthProbe = await server.rpc('update_my_student_goal', { new_goal: 'x'.repeat(1001) });
+      assert.equal(goalLengthProbe.error?.code, '23514', 'student goal RPC must reject an oversized goal without changing data');
       const lessons = await server.from('lessons').select('id, status').order('starts_at').limit(1);
       assert.ifError(lessons.error);
       assert((lessons.data ?? []).every((lesson) => lesson.status !== 'draft'), 'student lesson query exposed a Draft lesson');
@@ -68,6 +97,11 @@ async function verify(mode, email, password, destination) {
         const html = await result.text();
         assert(!html.includes('로그인 시간이 만료되었습니다'));
         if (mode === 'student') assert(!html.includes(' · Draft '));
+        if (path === '/student/schedule') {
+          assert(html.includes('내 목표'), 'student schedule did not render the goal dashboard');
+          assert(html.includes('나만의 목표를 설정해볼까요?'), 'student goal input did not render the empty-state placeholder');
+          assert(html.includes('name="goal"'), 'student goal input was not rendered');
+        }
         if (path === '/student/feedback') {
           assert(!html.includes('type="date"'), 'student feedback still rendered direct date inputs');
           assert(!html.includes('기간 적용'), 'student feedback still rendered the range submit button');

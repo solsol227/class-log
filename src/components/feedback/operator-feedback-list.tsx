@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import {
   deleteOwnFeedbackComment,
   updateFeedbackFromDialog,
@@ -68,7 +69,7 @@ function FeedbackCommentEditor({ studentId, feedbackId, comment, onChange }: {
         </div> : null}
       </div>
       {editing ? <form action={updateAction} className="mt-2 grid gap-2">
-        <textarea name="body" required maxLength={2000} rows={3} value={body} onChange={(event) => setBody(event.target.value)} className="w-full resize-y rounded-lg border border-[var(--line)] bg-white p-2 leading-6 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]" />
+        <AutoResizeTextarea name="body" required maxLength={2000} value={body} onChange={(event) => setBody(event.target.value)} className="w-full rounded-lg border border-[var(--line)] bg-white p-2 leading-6 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent)]" />
         <div className="flex items-center justify-end gap-2"><button type="button" onClick={() => { setBody(comment.body); setEditing(false); }} className="rounded-md px-2 py-1 text-xs font-semibold text-[var(--muted)]">취소</button><SubmitButton label="저장" pendingLabel="저장 중" className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-bold text-white" /></div>
       </form> : <p className="mt-1 whitespace-pre-wrap break-words">{body}</p>}
       {updateState.status === "error" ? <p role="alert" className="mt-2 text-xs font-semibold text-rose-700">{updateState.message}</p> : null}
@@ -100,7 +101,7 @@ function FeedbackDialogContent({ selected, onChange, close }: { selected: Operat
         <div className="min-w-0"><p className="text-sm font-bold text-[var(--accent-strong)]">{selected.studentName}</p><h2 id="operator-feedback-dialog-title" className="mt-2 text-2xl font-bold tracking-[-0.03em]">{selected.lessonTitle}</h2><p className="mt-2 text-sm text-[var(--muted)]">{formatDate(selected.startsAt)} · {formatTime(selected.startsAt)} ~ {formatTime(selected.endsAt)} · {selected.authorName}</p></div>
         <button type="button" onClick={close} aria-label="피드백 팝업 닫기" className="-mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full text-2xl font-bold hover:bg-[#eef4f3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">×</button>
       </header>
-      {selected.canEdit ? <textarea form={formId} name="body" required maxLength={10000} value={body} onChange={(event) => setBody(event.target.value)} aria-label="피드백 내용" className="mt-7 min-h-40 w-full resize-none overflow-hidden rounded-xl border border-transparent bg-transparent p-2 text-base leading-8 [field-sizing:content] hover:border-[var(--line)] focus:border-[var(--accent)] focus:bg-white focus-visible:outline-none" /> : <p className="mt-7 whitespace-pre-wrap break-words leading-8">{selected.body}</p>}
+      {selected.canEdit ? <AutoResizeTextarea form={formId} name="body" required maxLength={10000} value={body} onChange={(event) => setBody(event.target.value)} aria-label="피드백 내용" className="mt-7 w-full rounded-xl border border-transparent bg-transparent p-2 text-base leading-8 hover:border-[var(--line)] focus:border-[var(--accent)] focus:bg-white focus-visible:outline-none" /> : <p className="mt-7 whitespace-pre-wrap break-words leading-8">{selected.body}</p>}
       {state.status !== "idle" ? <p role={state.status === "error" ? "alert" : "status"} className={`mt-3 rounded-xl px-4 py-3 text-sm font-bold ${state.status === "error" ? "bg-rose-50 text-rose-900" : "bg-emerald-50 text-emerald-900"}`}>{state.message}</p> : null}
       <section className="mt-7 border-t border-[var(--line)] pt-5" aria-label="댓글과 답글"><h3 className="text-lg font-bold">댓글 {selected.commentCount}개</h3>{selected.comments.length ? <div className="mt-3 space-y-2">{selected.comments.map((comment) => <FeedbackCommentEditor key={comment.id} studentId={selected.studentId} feedbackId={selected.id} comment={comment} onChange={updateComment} />)}</div> : <p className="mt-2 text-sm text-[var(--muted)]">아직 댓글이 없습니다.</p>}</section>
     </div>

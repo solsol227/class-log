@@ -68,7 +68,8 @@ try {
     }
     await db.exec(await readFile(new URL(file, migrationDir), 'utf8'));
   }
-  check(files.length === 38, 'all 38 append-only migrations loaded');
+  check(files.length === 40, 'all 40 append-only migrations loaded');
+  check(await scalar("select count(*)::int from information_schema.columns where table_schema='public' and table_name='students' and column_name='goal'") === 1, 'student goal column added');
   check(await scalar("select count(*)::int from information_schema.columns where table_schema='public' and table_name='lesson_feedback' and column_name='published_at'") === 0, 'feedback publication column removed');
   stage = 'staff operator account bootstrap';
   await claims('operator', ids.operator);
@@ -76,9 +77,45 @@ try {
   const staffId = await scalar("select public.create_staff_with_operator_account('fixture staff','vocal_trainer',$1,'staff_one')", [ids.staffAuth]);
   const otherStaffId = await scalar("select public.create_staff_with_operator_account('other staff','manager',$1,'staff_two')", [ids.otherStaffAuth]);
   check(await scalar("select public.get_my_operator_context()->>'accessLevel'") === 'owner', 'existing operator is bootstrapped as owner');
-  stage = 'category and assignment regression';
-  await claims('operator', ids.operator);
+  stage = 'student goal permissions';
   await db.exec('set role authenticated');
+  const savedGoal = 'steady breathing\nrelaxed high notes';
+  const savedProfile = await scalar('select public.save_student_profile($1,$2,null,null,null,null,null,null,$3)', [ids.a, 'fixture-a', savedGoal]);
+  check(savedProfile.profileUpdated === true, 'owner saves a multiline student goal');
+  check(await scalar('select goal from public.students where id=$1', [ids.a]) === savedGoal, 'student goal preserves line breaks');
+  await blocked(() => scalar('select public.save_student_profile($1,$2,null,null,null,null,null,null,$3)', [ids.a, 'fixture-a', 'x'.repeat(1001)]), '23514', 'goal RPC enforces maximum length');
+  await claims('operator', ids.staffAuth);
+  check(await scalar('select count(*)::int from public.students where goal is not null') === 1, 'staff can read student goals');
+  await blocked(() => scalar('select public.save_student_profile($1,$2,null,null,null,null,null,null,$3)', [ids.a, 'fixture-a', 'staff edit']), '42501', 'staff cannot update student goals through the profile RPC');
+  await db.query("update public.students set goal='staff direct edit' where id=$1", [ids.a]);
+  check(await scalar('select goal from public.students where id=$1', [ids.a]) === savedGoal, 'staff direct goal update changes no row');
+  await claims('student', ids.authA);
+  check(await scalar('select goal from public.students where id=$1', [ids.a]) === savedGoal, 'student reads own goal');
+  check(await scalar('select count(*)::int from public.students where id=$1', [ids.b]) === 0, 'student cannot read another student goal');
+  await blocked(() => scalar('select public.save_student_profile($1,$2,null,null,null,null,null,null,$3)', [ids.a, 'fixture-a', 'student edit']), '42501', 'student cannot update a goal through the profile RPC');
+  await db.query("update public.students set goal='student direct edit' where id=$1", [ids.a]);
+  check(await scalar('select goal from public.students where id=$1', [ids.a]) === savedGoal, 'student direct goal update changes no row');
+  const studentEditedGoal = 'student owned goal\nshared with operator';
+  const ownGoalUpdate = await scalar('select public.update_my_student_goal($1)', [studentEditedGoal]);
+  check(ownGoalUpdate.goalUpdated === true && ownGoalUpdate.studentId === ids.a, 'student updates their own goal through the dedicated RPC');
+  check(await scalar('select goal from public.students where id=$1', [ids.a]) === studentEditedGoal, 'student goal RPC preserves line breaks');
+  check(await scalar('select nickname from public.students where id=$1', [ids.a]) === 'fixture-a', 'student goal RPC does not change another profile field');
+  await blocked(() => scalar('select public.update_my_student_goal($1)', ['x'.repeat(1001)]), '23514', 'student goal RPC enforces maximum length');
+  check(await scalar('select public.update_my_student_goal($1)->>\'goalUpdated\'', ['   ']) === 'true', 'student can clear their own goal');
+  check(await scalar('select goal is null from public.students where id=$1', [ids.a]), 'blank student goal is stored as null');
+  await scalar('select public.update_my_student_goal($1)', [studentEditedGoal]);
+  await claims('student', ids.authB);
+  await scalar('select public.update_my_student_goal($1)', ['student-b goal']);
+  check(await scalar('select goal from public.students where id=$1', [ids.b]) === 'student-b goal', 'second student updates only their own goal');
+  check(await scalar('select count(*)::int from public.students where id=$1', [ids.a]) === 0, 'second student still cannot read the first student goal');
+  await claims('operator', ids.staffAuth);
+  await blocked(() => scalar('select public.update_my_student_goal($1)', ['staff edit']), '42501', 'staff cannot call the student goal RPC');
+  await claims('operator', ids.operator);
+  await blocked(() => scalar('select public.update_my_student_goal($1)', ['owner student RPC edit']), '42501', 'owner cannot impersonate a student through the student goal RPC');
+  check(await scalar('select goal from public.students where id=$1', [ids.a]) === studentEditedGoal, 'operator reads the same goal saved by the student');
+  check(!await scalar("select has_function_privilege('anon','public.update_my_student_goal(text)','EXECUTE')"), 'anonymous role cannot execute the student goal RPC');
+  await claims('operator', ids.operator);
+  stage = 'category and assignment regression';
   check(await scalar('select schedule_category is null from public.lessons where id=$1', [legacy]), 'existing lesson remains unclassified');
   await save(legacy, null, [], 'edited legacy');
   check(await scalar('select title from public.lessons where id=$1', [legacy]) === 'edited legacy', 'unclassified metadata editable');
@@ -270,8 +307,8 @@ try {
       and completion_method='replacement_attendance' and completion_note is null`, [manualMakeup]), 'automatic completion path is appended to history');
 
   stage = 'independent profile/program transactions';
-  const profileArgs = [ids.a, 'fixture-renamed', null, 25, null, null, null, 'profile note'];
-  const profileSave = () => scalar('select public.save_student_profile($1,$2,$3,$4,$5,$6,$7,$8)', profileArgs);
+  const profileArgs = [ids.a, 'fixture-renamed', null, 25, null, null, null, 'profile note', null];
+  const profileSave = () => scalar('select public.save_student_profile($1,$2,$3,$4,$5,$6,$7,$8,$9)', profileArgs);
   const programsSave = changes => scalar('select public.save_student_programs($1,$2)', [ids.a, JSON.stringify(changes)]);
   const programsBefore = await scalar('select jsonb_agg(to_jsonb(p)) from public.student_programs p');
   check(await scalar("select has_function_privilege('authenticated','public.save_student_profile_and_programs(uuid,text,text,integer,text,text,date,text,jsonb)','EXECUTE')"), 'legacy integrated student RPC remains callable during rollout');
@@ -338,7 +375,7 @@ try {
   check(!await scalar("select has_function_privilege('anon','public.complete_makeup_without_schedule(uuid,text)','EXECUTE')"), 'anonymous manual completion RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.restore_manual_makeup_completion(uuid)','EXECUTE')"), 'anonymous manual restore RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.save_student_programs(uuid,jsonb)','EXECUTE')"), 'anonymous programs RPC denied');
-  check(!await scalar("select has_function_privilege('anon','public.save_student_profile(uuid,text,text,integer,text,text,date,text)','EXECUTE')"), 'anonymous profile RPC denied');
+  check(!await scalar("select has_function_privilege('anon','public.save_student_profile(uuid,text,text,integer,text,text,date,text,text)','EXECUTE')"), 'anonymous profile RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.delete_lesson_safely(uuid)','EXECUTE')"), 'anonymous lesson hard delete RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.confirm_draft_lesson(uuid)','EXECUTE')"), 'anonymous Draft confirmation RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.assign_student_to_lessons(uuid[],uuid,uuid)','EXECUTE')"), 'anonymous batch assignment RPC denied');

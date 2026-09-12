@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import {
   createStudent,
   type StudentCreateActionState,
@@ -169,6 +170,26 @@ export function StudentCreateForm() {
         error={state.fieldErrors.nickname}
         defaultValue={state.values?.nickname}
       />
+      <div>
+        <label htmlFor="student-goal" className="mb-2 block text-sm font-bold">
+          목표 (선택)
+        </label>
+        <AutoResizeTextarea
+          id="student-goal"
+          name="goal"
+          maxLength={1000}
+          defaultValue={state.values?.goal}
+          aria-invalid={Boolean(state.fieldErrors.goal)}
+          aria-describedby={state.fieldErrors.goal ? "student-goal-error" : undefined}
+          placeholder="학생이 이루고 싶은 목표"
+          className="w-full rounded-xl border border-[#9badaa] bg-white px-4 py-3 text-base leading-7 outline-none transition focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4] aria-invalid:border-rose-600 aria-invalid:focus:ring-rose-100"
+        />
+        {state.fieldErrors.goal ? (
+          <p id="student-goal-error" className="mt-2 text-sm font-semibold text-rose-800">
+            {state.fieldErrors.goal}
+          </p>
+        ) : null}
+      </div>
       <PasswordField error={state.fieldErrors.password} />
       <FormField
         id="password-confirmation"

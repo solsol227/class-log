@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useLayoutEffect, useRef } from "react";
+import { useActionState, useRef } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import { createSchedule, updateSchedule, type ScheduleActionState } from "./actions";
 import { ScheduleDateTimeFields, type ScheduleDateTimeFieldsHandle } from "./schedule-date-time-fields";
 import { StudentMultiSelectField, type StudentSelectOption } from "./student-multi-select-field";
@@ -65,27 +66,12 @@ export function ScheduleForm({ mode, lessonId, initialValues, students, onCancel
       </div>
       <div>
         <label htmlFor="schedule-notes" className="mb-2 block text-sm font-bold">메모 (선택)</label>
-        <AutoResizeTextarea id="schedule-notes" name="notes" defaultValue={values?.notes} />
+        <AutoResizeTextarea id="schedule-notes" name="notes" defaultValue={values?.notes} className="min-h-13 w-full rounded-xl border border-[#9badaa] bg-white px-4 py-3 text-base leading-7 outline-none focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4]" />
       </div>
       {students ? <StudentMultiSelectField key={(values?.studentProgramIds ?? []).join(",")} students={students} initialSelectedProgramIds={values?.studentProgramIds} error={state.fieldErrors.students} /> : null}
       <FormActions mode={mode} onCancel={onCancel} />
     </form>
   );
-}
-
-function AutoResizeTextarea({ id, name, defaultValue }: { id: string; name: string; defaultValue?: string }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  function resize() {
-    const textarea = ref.current;
-    if (!textarea) return;
-    textarea.style.height = "52px";
-    textarea.style.height = `${Math.max(52, textarea.scrollHeight)}px`;
-  }
-
-  useLayoutEffect(resize, [defaultValue]);
-
-  return <textarea ref={ref} id={id} name={name} rows={1} defaultValue={defaultValue} onInput={resize} className="min-h-13 w-full resize-none overflow-hidden rounded-xl border border-[#9badaa] bg-white px-4 py-3 text-base leading-7 outline-none focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4]" />;
 }
 
 function FormInput({ id, label, name, defaultValue, error }: { id: string; label: string; name: string; defaultValue?: string; error?: string }) {

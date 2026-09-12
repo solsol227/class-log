@@ -44,6 +44,7 @@ type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
 type ProgramFilter = (typeof PROGRAM_OPTIONS)[number]["value"];
 type BadgeStatus = keyof typeof BADGE_LABELS;
 type ProgramStatus = {
+  student_program_id: string;
   student_id: string;
   program_type: string;
   stored_status: string;
@@ -51,6 +52,11 @@ type ProgramStatus = {
   ended_at: string | null;
   stop_reason: string | null;
   last_lesson_at: string | null;
+};
+type AllowanceStatus = {
+  student_program_id: string;
+  period_month: string | null;
+  remaining_count: number | null;
 };
 
 function getLatestStoppedPrograms(programs: ProgramStatus[]) {
@@ -105,6 +111,35 @@ function getProgramLabels(programs: ProgramStatus[]) {
     .map((option) => PROGRAM_LABELS[option.value]);
 }
 
+function getCurrentKstMonth() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    timeZone: "Asia/Seoul",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  return `${year}-${month}-01`;
+}
+
+function getAllowanceLabels(programs: ProgramStatus[], allowances: AllowanceStatus[]) {
+  const currentMonth = getCurrentKstMonth();
+  const activePrograms = programs.filter((program) => program.stored_status === "active");
+  return PROGRAM_OPTIONS.flatMap((option) => {
+    if (option.value === "all") return [];
+    const program = activePrograms.find((item) => item.program_type === option.value);
+    if (!program) return [];
+    const allowance = allowances.find((item) =>
+      item.student_program_id === program.student_program_id
+      && (program.program_type === "weekday_vocal" || program.program_type === "weekend_vocal"
+        ? item.period_month === currentMonth
+        : item.period_month === null),
+    );
+    if (allowance?.remaining_count === null || allowance?.remaining_count === undefined) return [];
+    return [`${PROGRAM_LABELS[program.program_type] ?? program.program_type} · 남은 ${allowance.remaining_count}회`];
+  });
+}
+
 function getLastAssignmentLabel(programs: ProgramStatus[]) {
   const lastLessonAt = programs.reduce<string | null>((latest, program) => {
     if (!program.last_lesson_at) return latest;
@@ -128,14 +163,21 @@ export default async function OperatorStudentsPage({
   const normalizedQuery = query.toLocaleLowerCase("ko-KR");
 
   const supabase = await createSupabaseServerClient();
-  const [{ data: students, error }, { data: programStatuses, error: programError }] = await Promise.all([
+  const [{ data: students, error }, { data: programStatuses, error: programError }, { data: allowanceStatuses, error: allowanceError }] = await Promise.all([
     supabase.from("students").select("id, nickname").order("nickname", { ascending: true }),
-    supabase.from("student_program_statuses").select("student_id, program_type, stored_status, effective_status, ended_at, stop_reason, last_lesson_at"),
+    supabase.from("student_program_statuses").select("student_program_id, student_id, program_type, stored_status, effective_status, ended_at, stop_reason, last_lesson_at"),
+    supabase.from("student_program_allowance_statuses").select("student_program_id, period_month, remaining_count"),
   ]);
-  if (error || programError) throw new Error("학생 목록을 불러오지 못했습니다.", { cause: error ?? programError });
+  if (error || programError || allowanceError) throw new Error("학생 목록을 불러오지 못했습니다.", { cause: error ?? programError ?? allowanceError });
 
+  const programsByStudent = programStatuses.reduce<Map<string, ProgramStatus[]>>((map, item) => {
+    const items = map.get(item.student_id) ?? [];
+    items.push(item);
+    map.set(item.student_id, items);
+    return map;
+  }, new Map());
   const classified = students.map((student) => {
-    const listState = classifyStudent(programStatuses.filter((programStatus) => programStatus.student_id === student.id));
+    const listState = classifyStudent(programsByStudent.get(student.id) ?? []);
     return { ...student, ...listState };
   });
   const showTrialOption = classified.some((student) => student.relevantPrograms.some((item) => item.program_type === "trial"));
@@ -198,6 +240,7 @@ export default async function OperatorStudentsPage({
         <ul className="mt-6 space-y-3">
           {filteredStudents.map((student) => {
             const programLabels = getProgramLabels(student.relevantPrograms);
+            const allowanceLabels = getAllowanceLabels(student.relevantPrograms, allowanceStatuses);
             return (
               <li key={student.id}>
                 <Link href={`/operator/students/${student.id}`} className="block rounded-2xl border border-[var(--line)] bg-white p-5 shadow-[0_16px_45px_rgba(23,64,60,0.06)] transition hover:border-[var(--accent)]">
@@ -206,7 +249,7 @@ export default async function OperatorStudentsPage({
                     <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-bold ${BADGE_STYLES[student.badgeStatus]}`}>{BADGE_LABELS[student.badgeStatus]}</span>
                   </div>
                   <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--muted)]">
-                    <span>{programLabels.length > 0 ? programLabels.join(" · ") : "이용프로그램 없음"}</span>
+                    {allowanceLabels.length > 0 ? allowanceLabels.map((label, index) => <span key={label} className="inline-flex items-center gap-2">{index > 0 ? <span aria-hidden="true" className="text-[var(--line)]">|</span> : null}<span>{label}</span></span>) : <span>{programLabels.length > 0 ? programLabels.join(" · ") : "이용프로그램 없음"}</span>}
                     {student.badgeStatus === "inactive" ? <><span aria-hidden="true">·</span><span>{getLastAssignmentLabel(student.relevantPrograms)}</span></> : null}
                   </div>
                 </Link>

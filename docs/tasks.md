@@ -217,6 +217,19 @@ PR30의 `operator_accounts`를 권한 source of truth로 사용한다. owner만 
 - [ ] 브라우저 CRUD E2E 자동화
 - [ ] 학생 피드백 아카이브 pagination 및 조회 상한 개선 (현재 일정·피드백 200건, 댓글 1,000건)
 
+## 구현 완료 — PR36 학생 목표·프로필·잔여 횟수 UX
+
+- [x] `students.goal` nullable append-only migration과 최대 1000자 제약
+- [x] owner 수정, staff 조회, student 본인 조회 및 전용 RPC 자기 목표 수정 경계
+- [x] 학생 등록·학생정보 편집 목표 입력과 학생 이용권 대시보드 목표 편집
+- [x] 학생정보 보기·편집 중복 제목과 설명 제거
+- [x] 학생 목록 active 프로그램별 현재 잔여 횟수 일괄 조회
+- [x] 공통 `AutoResizeTextarea`와 기존 textarea 안전 적용
+- [x] 최신 40개 migration·139개 PGlite 역할별 회귀 검증
+- [x] ESLint / TypeScript / production build / diff check 최종 검증
+- [x] 신규 student 목표 RPC 원격 적용·40개 이력 일치·DB lint
+- [x] production 브라우저 직접 UI 확인
+
 ## 구현 중 — PR34 일정 및 학생 피드백 Compact UX
 
 - [x] 운영자 일정 카테고리·상태 필터 데스크톱 한 줄 배치

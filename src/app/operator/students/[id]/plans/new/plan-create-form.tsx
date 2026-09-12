@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import {
   createMonthlyPlan,
   type PlanCreateActionState,
@@ -65,10 +66,9 @@ export function PlanCreateForm({ studentId }: { studentId: string }) {
 
       <div>
         <label htmlFor="summary" className="mb-2 block text-sm font-bold">요약 (선택)</label>
-        <textarea
+        <AutoResizeTextarea
           id="summary"
           name="summary"
-          rows={4}
           defaultValue={state.values?.summary}
           className="w-full rounded-xl border border-[#9badaa] bg-white px-4 py-3 text-base outline-none transition focus:border-[var(--accent)] focus:ring-3 focus:ring-[#bce9e4]"
         />
