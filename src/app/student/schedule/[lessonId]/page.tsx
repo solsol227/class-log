@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StudentFeedbackThread } from "@/components/feedback/student-feedback-thread";
+import { FeedbackAttachments } from "@/components/feedback/feedback-attachments";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
+import { loadFeedbackAttachments } from "@/lib/feedback/attachments";
 import {
   loadStudentCommentAuthorNames,
   loadStudentFeedbackAuthors,
@@ -73,7 +75,7 @@ export default async function StudentScheduleDetailPage({
   const feedback = feedbackResult.data ?? [];
   const feedbackIds = feedback.map((item) => item.id);
   const staffIds = [...new Set((lessonStaffResult.data ?? []).map((item) => item.staff_id))];
-  const [staffResult, commentsResult, feedbackAuthors, lessonPrograms] = await Promise.all([
+  const [staffResult, commentsResult, feedbackAuthors, lessonPrograms, attachmentsByFeedback] = await Promise.all([
     staffIds.length
       ? supabase.from("staff_profiles").select("id, display_name").in("id", staffIds)
       : Promise.resolve({ data: [], error: null }),
@@ -88,6 +90,7 @@ export default async function StudentScheduleDetailPage({
       : Promise.resolve({ data: [], error: null }),
     loadStudentFeedbackAuthors(supabase, feedbackIds),
     loadStudentLessonPrograms(supabase, [lessonId]),
+    loadFeedbackAttachments(supabase, feedbackIds),
   ]);
   if (staffResult.error || commentsResult.error) {
     throw new Error("일정 담당자와 댓글을 불러오지 못했습니다.", { cause: staffResult.error ?? commentsResult.error });
@@ -141,6 +144,7 @@ export default async function StudentScheduleDetailPage({
                   <h3 className="mt-2 text-lg font-bold">{lesson.title}</h3>
                   <p className="mt-1 text-sm text-[var(--muted)]">{author ? `${author.display_name} · ${STAFF_ROLE_LABELS[author.role] ?? author.role}` : "피드백 제공자"}</p>
                   <p className="mt-4 whitespace-pre-wrap break-words text-[1.05rem] leading-8">{item.body}</p>
+                  <FeedbackAttachments feedbackId={item.id} initialItems={attachmentsByFeedback.get(item.id) ?? []} />
                   <StudentFeedbackThread feedbackId={item.id} lessonId={lessonId} returnTo={returnPath} comments={itemComments} authorNames={commentAuthorNames} />
                 </article>
               );

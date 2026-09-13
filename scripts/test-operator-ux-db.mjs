@@ -34,7 +34,13 @@ try {
     create schema auth;
     create schema extensions;
     create schema cron;
+    create schema storage;
     create table auth.users(id uuid primary key, raw_app_meta_data jsonb, created_at timestamptz default now());
+    create table storage.buckets(id text primary key, name text not null, public boolean not null default false, file_size_limit bigint, allowed_mime_types text[]);
+    create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text not null, name text not null, owner_id text, metadata jsonb);
+    alter table storage.objects enable row level security;
+    grant usage on schema storage to authenticated;
+    grant select, insert, update, delete on storage.objects to authenticated;
     create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt()->>'sub')::uuid $$;
     grant usage on schema auth to authenticated, anon;
@@ -68,7 +74,7 @@ try {
     }
     await db.exec(await readFile(new URL(file, migrationDir), 'utf8'));
   }
-  check(files.length === 40, 'all 40 append-only migrations loaded');
+  check(files.length === 41, 'all 41 append-only migrations loaded');
   check(await scalar("select count(*)::int from information_schema.columns where table_schema='public' and table_name='students' and column_name='goal'") === 1, 'student goal column added');
   check(await scalar("select count(*)::int from information_schema.columns where table_schema='public' and table_name='lesson_feedback' and column_name='published_at'") === 0, 'feedback publication column removed');
   stage = 'staff operator account bootstrap';
@@ -347,23 +353,50 @@ try {
   stage = 'assigned staff attendance';
   check(Boolean(await scalar("update public.attendance_records set status='absent' where lesson_id=$1 and student_id=$2 returning id", [source, ids.a])), 'assigned staff can update attendance');
   stage = 'assigned staff feedback';
-  check(Boolean(await scalar("insert into public.lesson_feedback(lesson_id,student_id,author_staff_id,body) values ($1,$2,$3,'staff feedback') returning id", [lesson, ids.a, staffId])), 'assigned staff can create own feedback');
+  const staffFeedback = await scalar("insert into public.lesson_feedback(lesson_id,student_id,author_staff_id,body) values ($1,$2,$3,'staff feedback') returning id", [lesson, ids.a, staffId]);
+  check(Boolean(staffFeedback), 'assigned staff can create own feedback');
   check(await scalar("insert into public.lesson_feedback(lesson_id,student_id,author_staff_id,body) values ($1,$2,$3,'forged feedback') returning author_staff_id", [lesson, ids.a, otherStaffId]) === staffId, 'staff feedback provider is forced to self');
+  stage = 'assigned staff attachment';
+  const requestId = randomUUID();
+  stage = 'assigned staff attachment reservation';
+  const reservation = (await query("select * from public.reserve_feedback_attachment($1,'lesson-record.m4a','audio/mp4',1024,$2)", [staffFeedback, requestId]))[0];
+  check(reservation.storage_path.startsWith(`${staffFeedback}/`), 'attachment path uses feedback and random IDs only');
+  check(await scalar("select private.can_upload_feedback_attachment($1)", [reservation.storage_path]), 'storage upload policy helper accepts matching reservation');
+  stage = 'assigned staff attachment object insert';
+  await db.query("insert into storage.objects(bucket_id,name,owner_id,metadata) values ('feedback-attachments',$1,$2,$3)", [reservation.storage_path, ids.staffAuth, JSON.stringify({ mimetype: 'audio/mp4', size: 1024 })]);
+  stage = 'assigned staff attachment finalization';
+  check(Boolean(await scalar('select attachment_id from public.finalize_feedback_attachment($1)', [reservation.attachment_id])), 'assigned staff finalizes matching storage metadata');
+  await blocked(() => scalar("select attachment_id from public.reserve_feedback_attachment($1,'wrong.pdf','application/pdf',10,$2)", [staffFeedback, randomUUID()]), '23514', 'attachment MIME and extension allowlist enforced');
+  await blocked(() => scalar("select attachment_id from public.reserve_feedback_attachment($1,'large.png','image/png',$2,$3)", [staffFeedback, 10 * 1024 * 1024 + 1, randomUUID()]), '23514', 'image size limit enforced');
+  for (let index = 0; index < 4; index++) {
+    await scalar("select attachment_id from public.reserve_feedback_attachment($1,$2,'image/png',10,$3)", [staffFeedback, `fixture-${index}.png`, randomUUID()]);
+  }
+  await blocked(() => scalar("select attachment_id from public.reserve_feedback_attachment($1,'sixth.png','image/png',10,$2)", [staffFeedback, randomUUID()]), '23514', 'sixth attachment is rejected');
   await claims('operator', ids.otherStaffAuth);
   stage = 'unassigned staff attendance';
   check((await query("update public.attendance_records set status='present' where lesson_id=$1 and student_id=$2 returning id", [source, ids.a])).length === 0, 'unassigned staff cannot update attendance');
+  check(await scalar('select count(*)::int from public.feedback_attachments where feedback_id=$1', [staffFeedback]) === 1, 'active staff can read operational attachments');
+  await blocked(() => scalar("select attachment_id from public.reserve_feedback_attachment($1,'blocked.png','image/png',10,$2)", [staffFeedback, randomUUID()]), '42501', 'unassigned staff cannot reserve attachments');
   await claims('operator', ids.operator);
+  check(Boolean(await scalar('select public.begin_delete_feedback_attachment($1)', [reservation.attachment_id])), 'owner can begin deleting a staff attachment');
+  await scalar('select public.cancel_delete_feedback_attachment($1)', [reservation.attachment_id]);
   stage = 'disable staff';
   await scalar('select public.set_staff_operator_account_enabled($1,false)', [staffId]);
   await claims('operator', ids.staffAuth);
   check(await scalar('select public.get_my_operator_context() is null'), 'disabled staff has no operator context');
   check(await scalar('select count(*)::int from public.students') === 0, 'disabled staff loses operational reads immediately');
+  await blocked(() => scalar("select attachment_id from public.reserve_feedback_attachment($1,'blocked.png','image/png',10,$2)", [staffFeedback, randomUUID()]), '42501', 'disabled staff cannot reserve attachments');
   await claims('operator', ids.operator);
   await scalar('select public.set_staff_operator_account_enabled($1,true)', [staffId]);
   await claims('student', ids.authA);
   check(await scalar('select count(*)::int from public.students') === 1, 'student sees self only');
   check(await scalar('select count(*)::int from public.lessons where id=$1', [legacy]) === 0, 'student cannot see Draft');
   check(await scalar('select count(*)::int from public.lessons where id=$1', [lesson]) === 1, 'student sees own confirmed lesson');
+  check(await scalar('select count(*)::int from public.feedback_attachments where feedback_id=$1', [staffFeedback]) === 1, 'student sees own feedback attachment');
+  await blocked(() => scalar("select attachment_id from public.reserve_feedback_attachment($1,'blocked.png','image/png',10,$2)", [staffFeedback, randomUUID()]), '42501', 'student cannot reserve attachments');
+  await claims('student', ids.authB);
+  check(await scalar('select count(*)::int from public.feedback_attachments where feedback_id=$1', [staffFeedback]) === 0, 'other student cannot discover attachment metadata');
+  await claims('student', ids.authA);
   await blocked(profileSave, ['42501', 'P0002'], 'student profile mutation denied');
   await blocked(() => programsSave({}), ['42501', 'P0002'], 'student programs mutation denied');
   await blocked(() => save(null, 'weekday'), ['42501', 'P0002'], 'student lesson mutation denied');
@@ -379,6 +412,7 @@ try {
   check(!await scalar("select has_function_privilege('anon','public.delete_lesson_safely(uuid)','EXECUTE')"), 'anonymous lesson hard delete RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.confirm_draft_lesson(uuid)','EXECUTE')"), 'anonymous Draft confirmation RPC denied');
   check(!await scalar("select has_function_privilege('anon','public.assign_student_to_lessons(uuid[],uuid,uuid)','EXECUTE')"), 'anonymous batch assignment RPC denied');
+  check(!await scalar("select has_function_privilege('anon','public.reserve_feedback_attachment(uuid,text,text,bigint,uuid)','EXECUTE')"), 'anonymous attachment reservation RPC denied');
   check(!await scalar("select has_function_privilege('anon','private.is_owner()','EXECUTE')"), 'anonymous owner permission helper denied');
   console.log(`PASS: ${files.length} migrations and ${passed} local PostgreSQL assertions. Synthetic in-memory data only.`);
 } catch (error) {
