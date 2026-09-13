@@ -237,6 +237,18 @@ PR30 병합 후 삭제와 Draft 확정은 서버의 `requireOperatorAccess({ own
 
 피드백과 댓글 삭제는 `deleted_at` soft-delete 후 7일 복구 유예를 둔다. `private.purge_deleted_feedback()`을 pg_cron이 매시간 실행해 만료된 row를 물리 삭제한다. 삭제된 피드백의 대화 전체는 함께 삭제하고, 개별 삭제 댓글의 미삭제 답글은 parent 연결만 해제해 보존한다. 함수는 외부 role에 공개하지 않는다.
 
+### 피드백 첨부
+
+`feedback_attachments`는 private Storage bucket `feedback-attachments`의 metadata만 보관한다. 원본 binary는 DB에 저장하지 않는다. object path는 `feedback UUID/random UUID`만 사용하며 원본 파일명은 metadata에만 둔다.
+
+- 허용 형식: JPEG/JPG, PNG, WebP, MP3, M4A, WAV, WebM
+- 제한: 합계 5개·150MB, 이미지 10MB/파일, 음성 100MB/파일
+- 상태: `pending → ready`, 실패 시 `failed`, 삭제 중 `deleting`, feedback 물리 삭제 뒤 `orphaned`
+- 업로드: 서버 RPC가 피드백·담당자·파일 metadata·개수·용량을 검증하고 임의 path 하나를 예약한 뒤 브라우저가 Storage로 직접 업로드한다. 서버 finalization은 `storage.objects`의 실제 MIME/size가 예약과 일치할 때만 `ready`로 바꾼다.
+- 조회: metadata RLS와 Storage object RLS가 owner/활성 staff 또는 `private.student_can_view_feedback()`을 함께 확인한다. 120초 signed URL은 요청 때마다 재발급하며 저장하지 않는다.
+- 보상: finalization 실패는 metadata를 `failed`로 바꿔 즉시 비노출한 뒤 object 삭제를 시도한다. 명시적 삭제는 먼저 `deleting`으로 비노출하고 Storage API 삭제 성공 뒤 metadata를 제거한다. 이 cleanup 호출만 `server-only` admin client를 사용하며, browser에는 secret key나 임의 삭제 권한을 주지 않는다. Storage 삭제가 실패하면 `deleting`을 유지해 접근 불가능한 정리 대기 상태로 남기고 내부 로그만 기록한다.
+- 보존: feedback soft-delete 즉시 metadata/object 조회가 차단된다. 7일 뒤 feedback hard-delete 시 attachment metadata는 원본 파일명을 제거한 `orphaned` 정리 대기 row로 남으므로 Storage object를 SQL에서 직접 삭제하지 않는다. 운영 cleanup은 반드시 Storage API로 수행한다.
+
 ## 9. 보강
 
 `makeup_lessons` 상태:

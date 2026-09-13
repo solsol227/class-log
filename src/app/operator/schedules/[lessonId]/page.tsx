@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireOperatorAccess } from "@/lib/auth/operator-access";
+import { loadFeedbackAttachments } from "@/lib/feedback/attachments";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -66,6 +67,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   if (assignmentsError || studentsError || attendanceError || programsError || staffError || lessonStaffError || feedbackError) {
     throw new Error("일정과 학생 정보를 불러오지 못했습니다.", { cause: assignmentsError ?? studentsError ?? attendanceError ?? programsError ?? staffError ?? lessonStaffError ?? feedbackError });
   }
+  const feedbackAttachments = await loadFeedbackAttachments(supabase, (feedback ?? []).map((item) => item.id));
 
   const attendanceIds = attendanceRecords.map((record) => record.id);
   const { data: linkedMakeups, error: linkedMakeupsError } = attendanceIds.length
@@ -118,6 +120,7 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
       authorName: staffNames.get(item.author_staff_id) ?? "작성자 확인 불가",
       createdAt: item.created_at,
       commentCount: item.feedback_comments?.[0]?.count ?? 0,
+      attachments: feedbackAttachments.get(item.id) ?? [],
       canEdit: access.isOwner || Boolean(isAssignedStaff && (item.created_by === access.authUserId || item.author_staff_id === access.staffProfileId)),
       canDelete: access.isOwner,
     })),

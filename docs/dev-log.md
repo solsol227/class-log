@@ -1,5 +1,13 @@
 # Class Log 개발 기록
 
+## 2026-09-13 — Codex — PR37 피드백 이미지·녹음파일 첨부
+
+- 기준: PR36 병합 `origin/main` `c1880af`와 local main이 일치하고 clean인 별도 worktree에서 `feat/feedback-attachments`를 생성했다. 작업 전 local/remote migration 40개 일치, Storage bucket 0개, attachment metadata table 부재, 피드백 약 5건·댓글 1건을 개인정보 없이 확인했다.
+- 구조: private `feedback-attachments` bucket과 `feedback_attachments` metadata를 append-only `20260913000000_add_feedback_attachments.sql`로 추가한다. UUID-only path, 원본 파일명 metadata, 합계 5개·150MB, 이미지 10MB, 음성 100MB, MIME+확장자 allowlist를 적용한다.
+- 흐름: 서버 RPC가 기존 owner/담당 staff 권한과 제한을 검사해 `pending` path를 예약하고 브라우저가 Storage에 직접 `upsert: false` 업로드한다. 서버가 실제 Storage MIME/size를 재검증한 뒤 `ready`로 전환한다. 실패·삭제 중·orphan은 RLS상 비노출하며 object 작업은 Storage API만 사용한다. Storage `remove()`에 SELECT도 필요하므로 보상/삭제 cleanup만 server-only admin client로 실행하고 secret key는 browser·응답·로그에 노출하지 않는다. 조회는 120초 signed URL을 발급하고 영구 저장하지 않는다.
+- UI: 새 피드백에서 다중 선택, 저장 전 이미지 thumbnail, 파일별 제거·용량 안내·진행 상태를 제공한다. 일정 modal의 기존 피드백은 첨부 조회만 하고 학생 상세/전체 피드백 dialog에서 수정 가능한 사용자가 첨부를 추가·삭제한다. 상세는 이미지 확대·audio player·다운로드, 목록은 `첨부 N개`만 표시한다.
+- 검증: 합성 PGlite에서 41개 migration과 owner/staff/inactive staff/student A·B/anon, Storage 예약/finalization, MIME·이미지 크기·6번째 파일 차단을 포함한 153개 assertion을 통과했다. TypeScript, ESLint, production build, diff check를 통과했다. 신규 migration 한 건을 원격 적용해 local/remote 41개가 일치하고 bucket `public=false`, 100MB 상한, MIME allowlist를 확인했다. 적용 후 public/private DB lint의 신규 경고는 없으며 기존 `delete_lesson_safely.locked_lesson_id` 경고 1건과 Supabase 내부 Storage 함수 경고만 있다. 원격 anon metadata read/upload/signed URL은 거부되고 delete는 대상 비노출 0-row였다. 저장된 테스트 owner/student 자격증명이 모두 `invalid_credentials`라 실제 로그인 양성 권한과 파일 업로드는 사용자 확인이 필요하며, 이 제한을 보고한 뒤 사용자가 브라우저 검수와 PR 마무리를 승인했다.
+
 ## 2026-09-12 — Codex — PR36 학생 목표·프로필·잔여 횟수 UX
 
 - 기준: PR34 compact UX와 PR35 직원 캘린더가 병합된 최신 `origin/main` `c5b3b08`에서 clean `feat/student-goals-and-summary` 브랜치를 만들었다. 작업 전 local/remote migration 38개 일치를 확인했다.

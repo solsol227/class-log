@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
+import { FeedbackAttachments } from "@/components/feedback/feedback-attachments";
 import {
   deleteOwnFeedbackComment,
   updateFeedbackFromDialog,
@@ -102,6 +103,7 @@ function FeedbackDialogContent({ selected, onChange, close }: { selected: Operat
         <button type="button" onClick={close} aria-label="피드백 팝업 닫기" className="-mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full text-2xl font-bold hover:bg-[#eef4f3] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">×</button>
       </header>
       {selected.canEdit ? <AutoResizeTextarea form={formId} name="body" required maxLength={10000} value={body} onChange={(event) => setBody(event.target.value)} aria-label="피드백 내용" className="mt-7 w-full rounded-xl border border-transparent bg-transparent p-2 text-base leading-8 hover:border-[var(--line)] focus:border-[var(--accent)] focus:bg-white focus-visible:outline-none" /> : <p className="mt-7 whitespace-pre-wrap break-words leading-8">{selected.body}</p>}
+      <FeedbackAttachments feedbackId={selected.id} initialItems={selected.attachments} canManage={selected.canEdit} />
       {state.status !== "idle" ? <p role={state.status === "error" ? "alert" : "status"} className={`mt-3 rounded-xl px-4 py-3 text-sm font-bold ${state.status === "error" ? "bg-rose-50 text-rose-900" : "bg-emerald-50 text-emerald-900"}`}>{state.message}</p> : null}
       <section className="mt-7 border-t border-[var(--line)] pt-5" aria-label="댓글과 답글"><h3 className="text-lg font-bold">댓글 {selected.commentCount}개</h3>{selected.comments.length ? <div className="mt-3 space-y-2">{selected.comments.map((comment) => <FeedbackCommentEditor key={comment.id} studentId={selected.studentId} feedbackId={selected.id} comment={comment} onChange={updateComment} />)}</div> : <p className="mt-2 text-sm text-[var(--muted)]">아직 댓글이 없습니다.</p>}</section>
     </div>
@@ -118,7 +120,7 @@ export function OperatorFeedbackList({ items, emptyMessage }: { items: OperatorF
   function finishClose() { setSelected(null); triggerRef.current?.focus(); }
   if (!items.length) return <p className="mt-5 text-[var(--muted)]">{emptyMessage}</p>;
   return <>
-    <ol className="mt-5 space-y-3">{items.map((item) => <li key={item.id}><article className="rounded-xl border border-[var(--line)] p-4 sm:p-5"><div className="flex min-w-0 items-center justify-between gap-3"><time className="min-w-0 truncate text-sm font-bold text-[var(--accent-strong)]" dateTime={item.startsAt}>{formatDate(item.startsAt)}</time><button type="button" onClick={(event) => { triggerRef.current = event.currentTarget; setSelected(item); }} className="min-h-10 shrink-0 rounded-xl border border-[var(--accent)] px-3 text-sm font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">더보기</button></div><h3 className="mt-2 truncate text-lg font-bold">{item.lessonTitle}</h3><p className="mt-2 truncate">{item.body}</p><p className="mt-2 text-sm text-[var(--muted)]">{item.authorName} · 댓글 {item.commentCount}개</p></article></li>)}</ol>
+    <ol className="mt-5 space-y-3">{items.map((item) => <li key={item.id}><article className="rounded-xl border border-[var(--line)] p-4 sm:p-5"><div className="flex min-w-0 items-center justify-between gap-3"><time className="min-w-0 truncate text-sm font-bold text-[var(--accent-strong)]" dateTime={item.startsAt}>{formatDate(item.startsAt)}</time><button type="button" onClick={(event) => { triggerRef.current = event.currentTarget; setSelected(item); }} className="min-h-10 shrink-0 rounded-xl border border-[var(--accent)] px-3 text-sm font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">더보기</button></div><h3 className="mt-2 truncate text-lg font-bold">{item.lessonTitle}</h3><p className="mt-2 truncate">{item.body}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]"><span>{item.authorName} · 댓글 {item.commentCount}개</span><FeedbackAttachments feedbackId={item.id} initialItems={item.attachments} compact /></div></article></li>)}</ol>
     <dialog ref={dialogRef} aria-labelledby="operator-feedback-dialog-title" aria-modal="true" onCancel={(event) => { event.preventDefault(); close(); }} onClose={finishClose} className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-2xl overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-[#102927]/55">{selected ? <FeedbackDialogContent key={selected.id} selected={selected} onChange={setSelected} close={close} /> : null}</dialog>
   </>;
 }
