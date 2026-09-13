@@ -9,7 +9,9 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "typecheck": "tsc --noEmit --incremental false",
-    "verify:login": "node scripts/verify-local-login.mjs"
+    "verify:login": "node scripts/verify-local-login.mjs",
+    "db:backup": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/backup-supabase.ps1",
+    "db:backup:test": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File scripts/backup-supabase.ps1 -SelfTest"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

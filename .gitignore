@@ -83,6 +83,9 @@ out/
 # Production output
 build/
 
+# Local database backups
+backups/
+
 # Nuxt.js build / generate output
 .nuxt
 dist
