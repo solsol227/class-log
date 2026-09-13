@@ -1,5 +1,23 @@
 # Class Log 작업 계획
 
+## 구현 완료·실계정 자동검증 제한 — PR37 피드백 이미지·녹음파일 첨부
+
+- [x] 최신 PR36 `origin/main` 기준 별도 worktree와 `feat/feedback-attachments`
+- [x] private `feedback-attachments` bucket과 append-only metadata migration
+- [x] owner/담당 staff mutation, owner/활성 staff/본인 student 조회 RLS
+- [x] 브라우저 직접 업로드와 서버 예약·Storage metadata finalization
+- [x] pending/failed/deleting/orphaned 비노출 및 Storage/DB 보상 처리
+- [x] 새 피드백 다중 선택·이미지 미리보기·진행 상태
+- [x] 학생 상세 피드백 dialog에서 기존 첨부 추가·삭제
+- [x] 일정 modal read-only 첨부, 학생 일정 상세·내 피드백 조회
+- [x] 목록형 카드 `첨부 N개`, 상세 이미지 확대·음성 재생·다운로드
+- [x] 41개 migration·153개 합성 PostgreSQL assertion
+- [x] ESLint / TypeScript / production build / diff check
+- [x] 원격 migration 적용, private bucket, 41개 이력, DB lint, anon 차단 검증
+- [ ] 실제 owner/staff/student 계정 첨부 권한 확인 (저장된 테스트 자격증명 만료)
+- [ ] 사용자 production UI·실제 파일 업로드 확인
+- [x] 저장 자격증명 만료와 검증 제한을 보고하고 사용자에게 PR 마무리 승인
+
 ## 구현 완료·사용자 확인 대기 — PR36 직원 담당 일정 월간 캘린더
 
 - [x] 최신 main(PR33 포함) 기준 별도 worktree와 브랜치

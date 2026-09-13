@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { FeedbackAttachments } from "@/components/feedback/feedback-attachments";
 import { requireAuthenticatedUser } from "@/lib/auth/require-auth";
 import { feedbackArchiveHref, parseFeedbackArchiveQuery } from "@/lib/feedback/archive-query";
+import { loadFeedbackAttachments } from "@/lib/feedback/attachments";
 import {
   countCommentsByFeedback,
   loadStudentFeedbackAuthors,
@@ -63,12 +65,13 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
 
   const feedback = feedbackResult.data ?? [];
   const feedbackIds = feedback.map((item) => item.id);
-  const [commentsResult, feedbackAuthors, lessonPrograms] = await Promise.all([
+  const [commentsResult, feedbackAuthors, lessonPrograms, attachmentsByFeedback] = await Promise.all([
     feedbackIds.length
       ? supabase.from("feedback_comments").select("feedback_id").in("feedback_id", feedbackIds).is("deleted_at", null).limit(STUDENT_COMMENT_LIMIT)
       : Promise.resolve({ data: [], error: null }),
     loadStudentFeedbackAuthors(supabase, feedbackIds),
     loadStudentLessonPrograms(supabase, lessonIds),
+    loadFeedbackAttachments(supabase, feedbackIds),
   ]);
   if (commentsResult.error) throw new Error("피드백 댓글 수를 불러오지 못했습니다.", { cause: commentsResult.error });
 
@@ -122,7 +125,7 @@ export default async function StudentFeedbackPage({ searchParams }: StudentFeedb
                     <h2 className="mt-2 text-lg font-bold tracking-[-0.02em]">{lesson.title}</h2>
                     <p className="mt-1 text-sm text-[var(--muted)]">{author ? `${author.display_name} · ${STAFF_ROLE_LABELS[author.role] ?? author.role}` : "피드백 제공자"}</p>
                     <p className="mt-4 whitespace-pre-wrap break-words leading-7">{item.body}</p>
-                    <p className="mt-2 text-sm font-semibold text-[var(--muted)]">댓글 {commentCounts.get(item.id) ?? 0}개</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-[var(--muted)]"><span>댓글 {commentCounts.get(item.id) ?? 0}개</span><FeedbackAttachments feedbackId={item.id} initialItems={attachmentsByFeedback.get(item.id) ?? []} compact /></div>
                   </article>
                 </Link>
               </li>

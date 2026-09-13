@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-09-13 — 피드백 첨부는 private Storage 예약·검증 흐름을 사용
+
+### 결정
+
+피드백 binary는 private `feedback-attachments` bucket에 저장하고 `feedback_attachments`에는 UUID path와 표시 metadata만 둔다. 서버가 권한·파일명/MIME/크기·개수·총량을 확인해 1시간 유효한 `pending` path를 예약하고, 브라우저가 `upsert: false`로 직접 업로드한 뒤 서버가 Storage metadata를 재검증해 `ready`로 확정한다. 조회·재생·다운로드는 120초 signed URL만 사용한다.
+
+Storage/DB 비원자성은 상태 전이와 보상 삭제로 처리한다. 실패·삭제 중·feedback 삭제 뒤 object는 RLS상 조회할 수 없으며, Storage schema metadata를 직접 삭제하지 않고 Storage API만 사용한다.
+
+### 이유
+
+최대 100MB 음성 파일을 Next.js/Vercel request body에 통과시키지 않으면서 임의 path 업로드와 공개 URL을 막고, owner/staff/student의 기존 피드백 권한을 binary 접근까지 동일하게 적용하기 위해서다. DB와 object 저장이 서로 다른 transaction이라는 사실을 숨기지 않고 실패를 사용자에게 분명히 알리기 위해 상태를 명시한다.
+
+---
+
 ## 2026-09-11 — 피드백 단일 공개 상태와 7일 삭제 유예
 
 ### 결정

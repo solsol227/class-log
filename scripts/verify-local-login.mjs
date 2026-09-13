@@ -1,12 +1,14 @@
 import nextEnv from '@next/env';
 import { parseEnv } from 'node:util';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createBrowserClient, createServerClient } from '@supabase/ssr';
 import assert from 'node:assert/strict';
 import { studentNicknameToAuthEmail } from '../src/lib/auth/student-identity.ts';
 nextEnv.loadEnvConfig(process.cwd());
-const test = parseEnv(readFileSync('.env.rls-test.local', 'utf8'));
+const test = existsSync('.env.rls-test.local')
+  ? parseEnv(readFileSync('.env.rls-test.local', 'utf8'))
+  : process.env;
 const baseUrl = process.env.CLASSLOG_TEST_BASE_URL ?? 'http://127.0.0.1:3000';
 const require = createRequire(import.meta.url);
 const { encodeReply } = require('next/dist/compiled/react-server-dom-webpack/client.node');
@@ -64,6 +66,13 @@ async function verify(mode, email, password, destination) {
       assert.equal(ownerGoalProbe.error?.code, 'P0002', 'owner profile RPC must reach the missing-row guard');
       const goalLengthProbe = await server.rpc('save_student_profile', { ...profileProbe, profile_goal: 'x'.repeat(1001) });
       assert.equal(goalLengthProbe.error?.code, '23514', 'deployed profile RPC must enforce the goal length');
+      const attachments = await server.from('feedback_attachments').select('id, feedback_id');
+      assert.ifError(attachments.error);
+      const attachmentProbe = await server.rpc('reserve_feedback_attachment', {
+        target_feedback_id: '00000000-0000-4000-8000-000000000000', target_original_file_name: 'probe.png',
+        target_mime_type: 'image/png', target_size_bytes: 1, target_client_request_id: crypto.randomUUID(),
+      });
+      assert.equal(attachmentProbe.error?.code, 'P0002', 'owner attachment RPC must reach the missing-feedback guard');
     }
     const paths = ['/api/auth/role', destination];
     if (mode === 'operator') paths.push('/operator/students');
@@ -79,6 +88,15 @@ async function verify(mode, email, password, destination) {
       assert.equal(deniedGoalUpdate.error?.code, '42501', 'student profile RPC must be denied before row lookup');
       const goalLengthProbe = await server.rpc('update_my_student_goal', { new_goal: 'x'.repeat(1001) });
       assert.equal(goalLengthProbe.error?.code, '23514', 'student goal RPC must reject an oversized goal without changing data');
+      const attachments = await server.from('feedback_attachments').select('id, feedback_id');
+      assert.ifError(attachments.error);
+      const attachmentProbe = await server.rpc('reserve_feedback_attachment', {
+        target_feedback_id: '00000000-0000-4000-8000-000000000000', target_original_file_name: 'probe.png',
+        target_mime_type: 'image/png', target_size_bytes: 1, target_client_request_id: crypto.randomUUID(),
+      });
+      assert.equal(attachmentProbe.error?.code, '42501', 'student attachment reservation must be denied');
+      const uploadProbe = await client.storage.from('feedback-attachments').upload(`permission-probe/${crypto.randomUUID()}`, new Blob(['x'], { type: 'image/png' }), { upsert: false });
+      assert(uploadProbe.error, 'student arbitrary-path storage upload must be denied');
       const lessons = await server.from('lessons').select('id, status').order('starts_at').limit(1);
       assert.ifError(lessons.error);
       assert((lessons.data ?? []).every((lesson) => lesson.status !== 'draft'), 'student lesson query exposed a Draft lesson');
@@ -122,5 +140,11 @@ async function main() {
   const unauthenticated = await fetch(baseUrl + '/api/auth/role', { method: 'POST' });
   assert.equal(unauthenticated.status, 401);
   console.log('Unauthenticated role request: PASS 401');
+  const anonymousClient = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, { cookies: { getAll: () => [], setAll: () => {} } });
+  const anonymousMetadata = await anonymousClient.from('feedback_attachments').select('id');
+  assert(anonymousMetadata.error, 'anonymous attachment metadata read must be denied');
+  const anonymousUpload = await anonymousClient.storage.from('feedback-attachments').upload(`permission-probe/${crypto.randomUUID()}`, new Blob(['x'], { type: 'image/png' }), { upsert: false });
+  assert(anonymousUpload.error, 'anonymous arbitrary-path storage upload must be denied');
+  console.log('Anonymous attachment read/upload: PASS denied');
 }
 main().catch(e => { console.error(e.name, e.message); process.exitCode = 1; });

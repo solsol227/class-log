@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildCommentAuthorNames, collectCommentAuthorIds } from "@/lib/feedback/comment-authors";
+import { loadFeedbackAttachments, type FeedbackAttachment } from "@/lib/feedback/attachments";
 import { STAFF_ROLE_LABELS } from "@/lib/feedback/student-feedback";
 
 export type OperatorFeedbackItem = {
@@ -18,6 +19,7 @@ export type OperatorFeedbackItem = {
   updatedAt: string;
   commentCount: number;
   canEdit: boolean;
+  attachments: FeedbackAttachment[];
   comments: Array<{
     id: string;
     parentCommentId: string | null;
@@ -60,7 +62,7 @@ export async function loadOperatorStudentFeedback(
   const lessonIds = [...new Set(feedback.map((item) => item.lesson_id))];
   const feedbackIds = feedback.map((item) => item.id);
   const staffIds = [...new Set(feedback.map((item) => item.author_staff_id))];
-  const [lessonsResult, staffResult, commentsResult, assignedStaffResult] = await Promise.all([
+  const [lessonsResult, staffResult, commentsResult, assignedStaffResult, attachmentsByFeedback] = await Promise.all([
     supabase.from("lessons").select("id, title, starts_at, ends_at").in("id", lessonIds),
     supabase.from("staff_profiles").select("id, display_name, role").in("id", staffIds),
     supabase
@@ -71,6 +73,7 @@ export async function loadOperatorStudentFeedback(
     actor && !actor.isOwner && actor.staffProfileId
       ? supabase.from("lesson_staff").select("lesson_id").in("lesson_id", lessonIds).eq("staff_id", actor.staffProfileId)
       : Promise.resolve({ data: [], error: null }),
+    loadFeedbackAttachments(supabase, feedbackIds),
   ]);
   const loadError = lessonsResult.error ?? staffResult.error ?? commentsResult.error ?? assignedStaffResult.error;
   if (loadError) throw new Error("피드백 상세 정보를 불러오지 못했습니다.", { cause: loadError });
@@ -113,6 +116,7 @@ export async function loadOperatorStudentFeedback(
       updatedAt: item.updated_at,
       commentCount: itemComments.filter((comment) => !comment.deleted_at).length,
       canEdit: Boolean(actor && (actor.isOwner || (assignedLessonIds.has(item.lesson_id) && (item.created_by === actor.authUserId || item.author_staff_id === actor.staffProfileId)))),
+      attachments: attachmentsByFeedback.get(item.id) ?? [],
       comments: itemComments.map((comment) => ({
         id: comment.id,
         parentCommentId: comment.parent_comment_id,
