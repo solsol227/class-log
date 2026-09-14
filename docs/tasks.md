@@ -1,5 +1,20 @@
 # Class Log 작업 계획
 
+## 구현·검증 중 — PR39 일정 modal 최근 피드백 이력·첨부 다운로드 교정
+
+- [x] 최신 PR38 `origin/main` 기준 별도 worktree와 `feat/recent-feedback-history`
+- [x] 현재 lesson 제한 원인 확인 및 student 기준 최근 feedback 최대 4건 조회
+- [x] 수업 시작일·생성일·ID 안정 최신순과 첫 3건 표시
+- [x] 네 번째 row 존재 여부의 기존 학생별 전체 피드백 route 연결
+- [x] 제공 직원 이름·역할, 삭제되지 않은 댓글 수, 첨부 metadata 일괄 조회
+- [x] 학생 상세와 공용 최근 피드백 카드 재사용
+- [x] 저장 후 modal 유지·최근 목록/전체 보기 즉시 갱신
+- [x] 한글 다운로드 파일명 이중 인코딩 제거와 anchor 직접 다운로드
+- [x] 다운로드 전 DB/Storage 크기·MIME 일치 확인
+- [x] ESLint / TypeScript / production build / diff check 최종 검증
+- [x] 실제 private Storage object read-only 다운로드·MIME·크기·anon 차단 확인
+- [ ] 인증된 사용자 production modal UI 확인 (사용 가능한 테스트 자격증명 없음)
+
 ## 구현 완료·실계정 자동검증 제한 — PR37 피드백 이미지·녹음파일 첨부
 
 - [x] 최신 PR36 `origin/main` 기준 별도 worktree와 `feat/feedback-attachments`

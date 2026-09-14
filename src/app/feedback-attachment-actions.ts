@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOperatorAccess } from "@/lib/auth/operator-access";
 import {
-  ALLOWED_ATTACHMENT_TYPES,
+  addDownloadFileName,
   FEEDBACK_ATTACHMENT_BUCKET,
   type FeedbackAttachment,
   validateAttachmentFile,
@@ -149,18 +149,45 @@ export async function getFeedbackAttachmentSignedUrl(
   const supabase = await createSupabaseServerClient();
   const attachment = await supabase
     .from("feedback_attachments")
-    .select("storage_path, original_file_name, mime_type")
+    .select("storage_path, original_file_name, mime_type, size_bytes")
     .eq("id", attachmentId)
     .eq("status", "ready")
     .maybeSingle();
-  if (attachment.error || !attachment.data || !ALLOWED_ATTACHMENT_TYPES.has(attachment.data.mime_type)) {
+  if (attachment.error || !attachment.data || validateAttachmentFile({
+    name: attachment.data.original_file_name,
+    type: attachment.data.mime_type,
+    size: Number(attachment.data.size_bytes),
+  })) {
     return { status: "error" as const, message: "이 첨부파일에 접근할 수 없습니다." };
   }
-  const signed = await supabase.storage.from(FEEDBACK_ATTACHMENT_BUCKET).createSignedUrl(
-    attachment.data.storage_path,
-    120,
-    disposition === "download" ? { download: attachment.data.original_file_name } : undefined,
-  );
+  const storage = supabase.storage.from(FEEDBACK_ATTACHMENT_BUCKET);
+  const objectInfo = await storage.info(attachment.data.storage_path);
+  const objectSize = Number(objectInfo.data?.size ?? 0);
+  const objectMimeType = objectInfo.data?.contentType?.toLowerCase();
+  if (
+    objectInfo.error
+    || objectSize <= 0
+    || objectSize !== Number(attachment.data.size_bytes)
+    || objectMimeType !== attachment.data.mime_type.toLowerCase()
+  ) {
+    return { status: "error" as const, message: "첨부파일 원본을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요." };
+  }
+  const signed = await storage.createSignedUrl(attachment.data.storage_path, 120);
   if (signed.error || !signed.data?.signedUrl) return { status: "error" as const, message: "첨부파일을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요." };
-  return { status: "success" as const, url: signed.data.signedUrl, expiresAt: Date.now() + 110_000 };
+  let url = signed.data.signedUrl;
+  if (disposition === "download") {
+    try {
+      url = addDownloadFileName(url, attachment.data.original_file_name);
+    } catch {
+      return { status: "error" as const, message: "다운로드 주소를 만들지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    }
+  }
+  return {
+    status: "success" as const,
+    url,
+    originalFileName: attachment.data.original_file_name,
+    mimeType: attachment.data.mime_type,
+    sizeBytes: Number(attachment.data.size_bytes),
+    expiresAt: Date.now() + 110_000,
+  };
 }

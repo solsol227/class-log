@@ -6,6 +6,30 @@
 
 ---
 
+## 2026-09-13 — 일정 피드백 modal의 최근 이력은 student 기준
+
+### 결정
+
+일정 상세의 학생별 피드백 modal은 현재 lesson의 기존 피드백 대신 선택한 student의 미삭제 피드백 전체 범위에서 수업 시작일, 피드백 생성일, 피드백 ID 최신순으로 최대 4건을 조회한다. 첫 3건만 표시하고 네 번째 row 존재 여부로 기존 `/operator/students/[studentId]/feedback` 전체 보기를 노출한다. 댓글 수와 첨부 metadata는 선택된 feedback ID 묶음으로만 조회한다.
+
+### 이유
+
+피드백을 작성하는 자리에서 학생의 최근 지도 맥락을 확인하면서도 전체 row·댓글 본문·signed URL을 미리 싣거나 학생별/피드백별 N+1 query를 만들지 않기 위해서다.
+
+---
+
+## 2026-09-13 — 첨부 다운로드 파일명은 signed URL에 한 번만 인코딩
+
+### 결정
+
+Supabase Storage SDK의 문자열 `download` option을 사용하지 않고 일반 signed URL을 만든 뒤 `URL.searchParams.set()`으로 검증된 원본 파일명을 한 번만 설정한다. 다운로드 전 Storage object info의 크기·MIME를 DB metadata와 대조하며, 클라이언트는 임시 anchor로 직접 스트리밍한다.
+
+### 이유
+
+현재 SDK가 `URLSearchParams` 결과에 다시 `encodeURI`를 적용해 한글 파일명의 percent 문자를 `%25`로 재인코딩하고, 현재 페이지 이동 방식이 modal 상태를 잃게 만들기 때문이다. 최대 100MB 음성을 Blob으로 복제하지 않으면서 정상 파일명과 private signed download를 유지한다.
+
+---
+
 ## 2026-09-13 — 피드백 첨부는 private Storage 예약·검증 흐름을 사용
 
 ### 결정

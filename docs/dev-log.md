@@ -1,5 +1,15 @@
 # Class Log 개발 기록
 
+## 2026-09-14 — Codex — PR39 일정 modal 최근 이력·첨부 다운로드 교정
+
+- 기준: PR37·PR38이 병합된 최신 `origin/main` `8acac0b`와 일치하는 clean Codex 별도 worktree에서 `feat/recent-feedback-history`를 생성했다. 기존 migration, DB, Storage object와 사용자 데이터는 변경하지 않는다.
+- 기존 이력: 일정 상세의 `.eq("lesson_id", lessonId)` feedback 선조회가 다른 일정 이력을 제외하던 원인이었다. modal을 연 student와 현재 active assignment를 서버에서 재검증한 뒤 `student_id`만으로 해당 학생이 모든 수업에서 받은 미삭제 feedback을 수업 시작일·생성일·ID 최신순으로 최대 4건만 조회한다. 3건을 `기존 피드백`으로 표시하고 네 번째 row로 기존 학생별 전체 피드백 route의 `전체 보기`를 판정한다. 제공자·댓글 count·첨부 metadata는 선택 ID 묶음으로 조회하며 댓글 본문과 signed URL은 선조회하지 않는다.
+- 저장: modal·입력 성공 안내 정책을 유지하고 새 feedback을 안정 정렬 목록에 병합한다. 4건째가 되면 전체 보기를 즉시 노출하며 첨부 성공분을 같은 카드에 반영하고 실패한 파일 선택은 보존한다. 전체 보기 이동에도 기존 미저장 입력 확인을 적용한다.
+- 다운로드: 설치된 Storage SDK 2.112.0의 문자열 download option은 `URLSearchParams` 뒤 전체 URL에 `encodeURI`를 다시 적용해 한글 filename의 `%`를 `%25`로 이중 인코딩한다. 일반 120초 signed URL을 만든 뒤 `URL.searchParams.set()`으로 파일명을 한 번만 설정하고, DB metadata와 Storage object info의 size/MIME가 일치할 때만 반환한다. 클라이언트는 페이지 이동 대신 중복 클릭을 막은 임시 anchor로 Storage가 직접 스트리밍하게 한다.
+- 검증: ESLint, `tsc --noEmit --incremental false`, production build, `git diff --check`와 0·1~3·3·4+건 및 교차 수업·동일 수업 다건·삭제 제외 fixture를 통과했다. private Storage 객체 6개를 변경 없이 읽어 모두 0바이트가 아니며 MP3 응답이 HTTP 200, `audio/mpeg`, 5,125,216 bytes임을 확인했고 한글 파일명은 단일 percent encoding, anon 다운로드는 차단됐다. production 로그인 화면과 잘못된 계정의 한국어 오류는 브라우저에서 확인했지만 사용 가능한 인증 자격증명이 없어 실제 modal 양성 UI는 사용자 확인이 필요하다.
+- 운영자 브라우저 재현: `loadModalFeedbackHistory` server action은 HTTP 200 RSC 응답 안에 오류 상태를 반환했고 Next 서버 stack의 원인은 `PGRST200`으로 확인됐다. 실제 schema에는 `lesson_feedback` → `lessons` 직접 FK가 없고 `lesson_assignments(lesson_id, student_id)` 복합 FK만 있으므로, 존재하지 않는 `lesson:lessons!inner(...)` 임베드를 제거하고 feedback·lessons를 별도 일괄 조회한 뒤 수업 시작일·작성일·ID로 메모리 정렬하여 최신 4건만 선택하도록 수정했다.
+- 수정 후 실제 operator 테스트 세션으로 cross-lesson feedback 학생을 읽어 `loadModalFeedbackHistory`를 호출한 결과 HTTP 200, 성공 상태, 3건, 오류 메시지 없음이었다. 같은 production 서버 콘솔에 새 `PGRST200` stack은 남지 않았다.
+
 ## 2026-09-13 — Codex — PR37 피드백 이미지·녹음파일 첨부
 
 - 기준: PR36 병합 `origin/main` `c1880af`와 local main이 일치하고 clean인 별도 worktree에서 `feat/feedback-attachments`를 생성했다. 작업 전 local/remote migration 40개 일치, Storage bucket 0개, attachment metadata table 부재, 피드백 약 5건·댓글 1건을 개인정보 없이 확인했다.

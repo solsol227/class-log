@@ -376,7 +376,9 @@ PR22 중립 lesson DB와의 호환을 위해 PR23 프로그램 라벨은 lesson 
 
 학생별 독립 피드백 작성 route는 제거한다. 모든 피드백·댓글 mutation은 운영자 인증 뒤 lesson, student, active assignment, feedback의 lesson/student 조합을 다시 확인하고, 일정 상세, 학생 상세·전체 피드백, 학생 일정 상세·내 피드백을 함께 revalidate한다. 기존 `lesson_feedback`, `feedback_comments`, operator RLS와 assignment 복합 FK를 재사용하므로 별도 migration이나 RPC를 추가하지 않는다.
 
-일정 상세의 피드백 진입은 roster의 학생별 modal로 통일한다. modal은 새 피드백을 저장하고 열린 상태를 유지하며, 같은 lesson/student의 기존 피드백은 읽기 전용으로 표시한다. 댓글은 삭제되지 않은 최상위 댓글과 답글의 합계만 조회하고 본문은 modal payload에 포함하지 않는다.
+일정 상세의 피드백 진입은 roster의 학생별 modal로 통일한다. modal은 새 피드백을 저장하고 열린 상태를 유지하며, 현재 lesson에 한정하지 않고 선택한 student의 미삭제 피드백을 수업일·생성일·ID 최신순으로 최대 4건 조회한다. 첫 3건만 공용 최근 카드로 표시하고 네 번째 row 존재 여부로 기존 학생별 전체 피드백 route의 `전체 보기`를 노출한다. 댓글은 삭제되지 않은 최상위 댓글과 답글의 합계만 일괄 집계하고 본문은 modal payload에 포함하지 않는다.
+
+첨부 다운로드는 private object의 metadata 크기·MIME를 DB metadata와 확인한 뒤 120초 일반 signed URL을 만든다. 다운로드 파일명은 SDK option에 넘기지 않고 반환 URL의 `download` query에 한 번만 설정하며, 브라우저는 임시 anchor로 Storage 응답을 직접 스트리밍해 현재 화면과 modal 상태를 유지한다.
 
 학생 상세와 전체 피드백의 조회 dialog는 별도 수정 page로 이동하지 않는다. 피드백 본문은 dialog 안의 inline textarea에서 수정하고, 로그인한 운영자가 직접 작성한 댓글·답글만 작은 수정·삭제 control을 표시한다. 댓글 소유권은 `author_user_id = auth.uid()`를 서버 action과 기존 RLS에서 함께 확인하며 삭제는 soft-delete다.
 

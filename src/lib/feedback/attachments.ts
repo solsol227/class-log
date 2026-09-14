@@ -53,6 +53,12 @@ export function formatAttachmentSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)}MB`;
 }
 
+export function addDownloadFileName(signedUrl: string, originalFileName: string) {
+  const downloadUrl = new URL(signedUrl);
+  downloadUrl.searchParams.set("download", originalFileName);
+  return downloadUrl.toString();
+}
+
 export async function loadFeedbackAttachments(supabase: SupabaseClient, feedbackIds: string[]) {
   const result = new Map<string, FeedbackAttachment[]>();
   if (!feedbackIds.length) return result;
