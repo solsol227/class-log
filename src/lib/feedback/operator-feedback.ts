@@ -3,7 +3,7 @@ import { buildCommentAuthorNames, collectCommentAuthorIds } from "@/lib/feedback
 import { loadFeedbackAttachments, type FeedbackAttachment } from "@/lib/feedback/attachments";
 import { STAFF_ROLE_LABELS } from "@/lib/feedback/student-feedback";
 
-export type OperatorFeedbackItem = {
+export type OperatorFeedbackSummary = {
   id: string;
   lessonId: string;
   studentId: string;
@@ -14,12 +14,14 @@ export type OperatorFeedbackItem = {
   body: string;
   authorName: string;
   authorRole: string;
-  authorStaffId: string;
   createdAt: string;
   updatedAt: string;
   commentCount: number;
-  canEdit: boolean;
   attachments: FeedbackAttachment[];
+};
+
+export type OperatorFeedbackItem = OperatorFeedbackSummary & {
+  canEdit: boolean;
   comments: Array<{
     id: string;
     parentCommentId: string | null;
@@ -30,6 +32,95 @@ export type OperatorFeedbackItem = {
     canEdit: boolean;
   }>;
 };
+
+type RecentFeedbackRow = {
+  id: string;
+  lesson_id: string;
+  student_id: string;
+  author_staff_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  feedback_comments: Array<{ count: number }> | null;
+};
+
+export async function loadOperatorStudentRecentFeedback(
+  supabase: SupabaseClient,
+  student: { id: string; nickname: string },
+  limit = 4,
+) {
+  // The schedule modal shows this student's history across every lesson, not only the lesson being edited.
+  const feedbackResult = await supabase
+    .from("lesson_feedback")
+    .select("id, lesson_id, student_id, author_staff_id, body, created_at, updated_at, feedback_comments(count)")
+    .eq("student_id", student.id)
+    .is("deleted_at", null)
+    .is("feedback_comments.deleted_at", null)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+  if (feedbackResult.error) {
+    throw new Error("최근 피드백을 불러오지 못했습니다.", { cause: feedbackResult.error });
+  }
+
+  const feedback = (feedbackResult.data ?? []) as RecentFeedbackRow[];
+  if (!feedback.length) return [];
+
+  // lesson_feedback has a composite FK to lesson_assignments, not a direct FK to lessons.
+  // Fetch the referenced lessons separately, then sort before applying the modal limit.
+  const lessonIds = [...new Set(feedback.map((item) => item.lesson_id))];
+  const lessonsResult = await supabase
+    .from("lessons")
+    .select("id, title, starts_at, ends_at")
+    .in("id", lessonIds);
+  if (lessonsResult.error) {
+    throw new Error("최근 피드백의 수업 정보를 불러오지 못했습니다.", { cause: lessonsResult.error });
+  }
+  const lessonById = new Map((lessonsResult.data ?? []).map((lesson) => [lesson.id, lesson]));
+  const recent = feedback
+    .filter((item) => lessonById.has(item.lesson_id))
+    .sort((left, right) => {
+      const leftLesson = lessonById.get(left.lesson_id)!;
+      const rightLesson = lessonById.get(right.lesson_id)!;
+      return rightLesson.starts_at.localeCompare(leftLesson.starts_at)
+        || right.created_at.localeCompare(left.created_at)
+        || right.id.localeCompare(left.id);
+    })
+    .slice(0, limit);
+  if (!recent.length) return [];
+
+  const feedbackIds = recent.map((item) => item.id);
+  const staffIds = [...new Set(recent.map((item) => item.author_staff_id))];
+  const [staffResult, attachmentsByFeedback] = await Promise.all([
+    supabase.from("staff_profiles").select("id, display_name, role").in("id", staffIds),
+    loadFeedbackAttachments(supabase, feedbackIds),
+  ]);
+  if (staffResult.error) {
+    throw new Error("최근 피드백 제공자 정보를 불러오지 못했습니다.", { cause: staffResult.error });
+  }
+
+  const staffById = new Map((staffResult.data ?? []).map((member) => [member.id, member]));
+  return recent.flatMap<OperatorFeedbackSummary>((item) => {
+    const lesson = lessonById.get(item.lesson_id);
+    if (!lesson) return [];
+    const author = staffById.get(item.author_staff_id);
+    return [{
+      id: item.id,
+      lessonId: item.lesson_id,
+      studentId: item.student_id,
+      studentName: student.nickname,
+      lessonTitle: lesson.title,
+      startsAt: lesson.starts_at,
+      endsAt: lesson.ends_at,
+      body: item.body,
+      authorName: author?.display_name ?? "작성자 확인 불가",
+      authorRole: author ? STAFF_ROLE_LABELS[author.role] ?? author.role : "",
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+      commentCount: item.feedback_comments?.[0]?.count ?? 0,
+      attachments: attachmentsByFeedback.get(item.id) ?? [],
+    }];
+  }).sort(compareOperatorFeedbackDesc);
+}
 
 type FeedbackRow = {
   id: string;
@@ -111,7 +202,6 @@ export async function loadOperatorStudentFeedback(
       body: item.body,
       authorName: author?.display_name ?? "작성자 확인 불가",
       authorRole: author ? STAFF_ROLE_LABELS[author.role] ?? author.role : "",
-      authorStaffId: item.author_staff_id,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
       commentCount: itemComments.filter((comment) => !comment.deleted_at).length,
@@ -130,13 +220,13 @@ export async function loadOperatorStudentFeedback(
   }).sort(compareOperatorFeedbackDesc);
 }
 
-export function compareOperatorFeedbackDesc(left: OperatorFeedbackItem, right: OperatorFeedbackItem) {
+export function compareOperatorFeedbackDesc(left: OperatorFeedbackSummary, right: OperatorFeedbackSummary) {
   return right.startsAt.localeCompare(left.startsAt)
     || right.createdAt.localeCompare(left.createdAt)
     || right.id.localeCompare(left.id);
 }
 
-export function compareOperatorFeedbackAsc(left: OperatorFeedbackItem, right: OperatorFeedbackItem) {
+export function compareOperatorFeedbackAsc(left: OperatorFeedbackSummary, right: OperatorFeedbackSummary) {
   return left.startsAt.localeCompare(right.startsAt)
     || left.createdAt.localeCompare(right.createdAt)
     || left.id.localeCompare(right.id);

@@ -58,6 +58,8 @@ export function AttachmentFilePicker({ files, onChange, disabled = false }: {
 function AttachmentMedia({ attachment }: { attachment: FeedbackAttachment }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const downloadInFlightRef = useRef(false);
   const previewRef = useRef<HTMLDialogElement>(null);
 
   async function loadUrl() {
@@ -78,9 +80,29 @@ function AttachmentMedia({ attachment }: { attachment: FeedbackAttachment }) {
   }, [attachment.id]);
 
   async function download() {
-    const result = await getFeedbackAttachmentSignedUrl(attachment.id, "download");
-    if (result.status === "success") window.location.assign(result.url);
-    else setError(result.message);
+    if (downloadInFlightRef.current) return;
+    downloadInFlightRef.current = true;
+    setDownloading(true);
+    setError(null);
+    try {
+      const result = await getFeedbackAttachmentSignedUrl(attachment.id, "download");
+      if (result.status === "success") {
+        const link = document.createElement("a");
+        link.href = result.url;
+        link.download = result.originalFileName;
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError("다운로드를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      downloadInFlightRef.current = false;
+      setDownloading(false);
+    }
   }
 
   const isImage = attachment.mimeType.startsWith("image/");
@@ -99,7 +121,7 @@ function AttachmentMedia({ attachment }: { attachment: FeedbackAttachment }) {
       </div>
       {!isImage && url ? <audio controls preload="metadata" src={url} onError={() => void loadUrl()} className="mt-3 h-10 w-full">이 브라우저에서는 음성 재생을 지원하지 않습니다.</audio> : null}
       {error ? <p role="alert" className="mt-2 text-sm font-semibold text-rose-700">{error} <button type="button" onClick={() => void loadUrl()} className="underline">다시 시도</button></p> : null}
-      <button type="button" onClick={() => void download()} className="mt-2 min-h-9 rounded-lg border border-[var(--line)] px-3 text-sm font-bold text-[var(--accent-strong)]">다운로드</button>
+      <button type="button" disabled={downloading} onClick={() => void download()} className="mt-2 min-h-9 rounded-lg border border-[var(--line)] px-3 text-sm font-bold text-[var(--accent-strong)] disabled:cursor-wait disabled:opacity-60">{downloading ? "다운로드 준비 중..." : "다운로드"}</button>
       {isImage ? (
         <dialog ref={previewRef} aria-label={`${attachment.originalFileName} 이미지 미리보기`} onClick={(event) => { if (event.target === previewRef.current) previewRef.current?.close(); }} className="m-auto max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--line)] bg-white p-3 shadow-2xl backdrop:bg-[#102927]/70">
           <div className="flex justify-end"><button type="button" onClick={() => previewRef.current?.close()} aria-label="이미지 미리보기 닫기" className="flex size-11 items-center justify-center rounded-full text-2xl">×</button></div>

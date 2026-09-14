@@ -3,40 +3,27 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
-import { AttachmentFilePicker, FeedbackAttachments } from "@/components/feedback/feedback-attachments";
+import { AttachmentFilePicker } from "@/components/feedback/feedback-attachments";
 import { uploadFeedbackAttachments } from "@/components/feedback/attachment-upload";
-import type { FeedbackAttachment } from "@/lib/feedback/attachments";
-import { createModalFeedback, type FeedbackModalActionState } from "./feedback-actions";
+import { OperatorFeedbackSummaryCard } from "@/components/feedback/operator-feedback-summary-card";
+import {
+  compareOperatorFeedbackDesc,
+  type OperatorFeedbackSummary,
+} from "@/lib/feedback/operator-feedback";
+import {
+  createModalFeedback,
+  loadModalFeedbackHistory,
+  type FeedbackModalActionState,
+} from "./feedback-actions";
 
 export type FeedbackAuthorOption = { id: string; name: string };
-
-export type StudentFeedbackModalItem = {
-  id: string;
-  body: string;
-  authorName: string;
-  createdAt: string;
-  commentCount: number;
-  attachments: FeedbackAttachment[];
-  canEdit: boolean;
-  canDelete: boolean;
-};
 
 export type StudentFeedbackModalData = {
   studentId: string;
   studentName: string;
-  items: StudentFeedbackModalItem[];
 };
 
 const INITIAL_STATE: FeedbackModalActionState = { status: "idle", message: "" };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "Asia/Seoul",
-  }).format(new Date(value)).replace(/\. /g, ".").replace(/\.$/, "");
-}
 
 function SaveButton({ pending }: { pending: boolean }) {
   return (
@@ -44,23 +31,6 @@ function SaveButton({ pending }: { pending: boolean }) {
       {pending ? "피드백을 저장하는 중입니다..." : "피드백 저장"}
     </button>
   );
-}
-
-function ExistingFeedbackItem({ item }: {
-  item: StudentFeedbackModalItem;
-}) {
-  return <article>
-    <p className="flex flex-wrap items-center gap-1.5 text-sm text-[var(--muted)]">
-      <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
-      <span aria-hidden="true">·</span>
-      <span>{item.authorName}</span>
-      {item.commentCount > 0 ? <><span aria-hidden="true">·</span><span className="rounded-full bg-[#e5f2f0] px-2.5 py-1 text-xs font-bold text-[var(--accent-strong)]">댓글 {item.commentCount}</span></> : null}
-    </p>
-    <div className="mt-2 rounded-xl border border-[var(--line)] bg-[#f8faf9] p-3">
-      <p className="whitespace-pre-wrap break-words leading-7">{item.body}</p>
-      {item.attachments.length ? <FeedbackAttachments feedbackId={item.id} initialItems={item.attachments} /> : null}
-    </div>
-  </article>;
 }
 
 export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedReason, isOwner, onClosed }: {
@@ -79,7 +49,28 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
   const [state, setState] = useState<FeedbackModalActionState>(INITIAL_STATE);
-  const [createdItems, setCreatedItems] = useState<StudentFeedbackModalItem[]>([]);
+  const [items, setItems] = useState<OperatorFeedbackSummary[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  async function refreshHistory() {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    const result = await loadModalFeedbackHistory(lessonId, data.studentId);
+    if (result.status === "success") {
+      setItems((current) => {
+        const itemMap = new Map(result.items.map((item) => [item.id, item]));
+        current.forEach((item) => itemMap.set(item.id, item));
+        return [...itemMap.values()].sort(compareOperatorFeedbackDesc).slice(0, 3);
+      });
+      setHasMore((current) => current || result.hasMore);
+    } else {
+      setHistoryError(result.message);
+    }
+    setHistoryLoading(false);
+  }
+
   async function submitFeedback(formData: FormData) {
     setSaving(true);
     setProgress(0);
@@ -89,13 +80,18 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
     if (result.status === "success" && result.feedback) {
       setBody("");
       const createdId = result.feedback.id;
-      setCreatedItems((current) => [{ ...result.feedback!, attachments: [], canEdit: true, canDelete: isOwner }, ...current.filter((item) => item.id !== createdId)]);
+      const createdFeedback = { ...result.feedback, studentName: data.studentName };
+      setItems((current) => {
+        const merged = [createdFeedback, ...current.filter((item) => item.id !== createdId)].sort(compareOperatorFeedbackDesc);
+        if (merged.length > 3) setHasMore(true);
+        return merged.slice(0, 3);
+      });
       if (files.length) {
         const uploaded = await uploadFeedbackAttachments(createdId, files, (completed) => setProgress(completed));
-        setCreatedItems((current) => current.map((item) => item.id === createdId ? { ...item, attachments: uploaded.uploaded } : item));
+        setItems((current) => current.map((item) => item.id === createdId ? { ...item, attachments: uploaded.uploaded } : item));
         setFiles(uploaded.failed.map((item) => item.file));
         setFileMessage(uploaded.failed.length
-          ? `피드백은 저장했지만 ${uploaded.failed.length}개 첨부에 실패했습니다. 아래 기존 피드백 관리 화면에서 다시 추가할 수 있습니다.`
+          ? `피드백은 저장했지만 ${uploaded.failed.length}개 첨부에 실패했습니다. 학생 피드백 화면에서 다시 추가할 수 있습니다.`
           : "첨부파일까지 저장했습니다.");
       } else {
         setFiles([]);
@@ -103,22 +99,42 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
     }
     setSaving(false);
   }
-  const itemMap = new Map(data.items.map((item) => [item.id, item]));
-  createdItems.forEach((item) => itemMap.set(item.id, item));
-  const items = [...itemMap.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
 
   useEffect(() => {
     const dialog = dialogRef.current;
     const previousBodyOverflow = document.body.style.overflow;
+    let cancelled = false;
     document.body.style.overflow = "hidden";
     if (!dialog?.open) dialog?.showModal();
     requestAnimationFrame(() => textareaRef.current?.focus());
-    return () => { document.body.style.overflow = previousBodyOverflow; };
-  }, []);
+    void loadModalFeedbackHistory(lessonId, data.studentId).then((result) => {
+      if (cancelled) return;
+      if (result.status === "success") {
+        setItems((current) => {
+          const itemMap = new Map(result.items.map((item) => [item.id, item]));
+          current.forEach((item) => itemMap.set(item.id, item));
+          const merged = [...itemMap.values()].sort(compareOperatorFeedbackDesc);
+          if (merged.length > 3) setHasMore(true);
+          return merged.slice(0, 3);
+        });
+        setHasMore((current) => current || result.hasMore);
+      } else {
+        setHistoryError(result.message);
+      }
+      setHistoryLoading(false);
+    });
+    return () => {
+      cancelled = true;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [data.studentId, lessonId]);
+
+  function confirmDiscard(message: string) {
+    return !(body.length > 0 || files.length > 0) || window.confirm(message);
+  }
 
   function requestClose() {
-    if (saving) return;
-    if ((body.length > 0 || files.length > 0) && !window.confirm("작성 중인 피드백이나 선택한 첨부파일이 있습니다. 저장하지 않고 닫으시겠습니까?")) return;
+    if (saving || !confirmDiscard("작성 중인 피드백이나 선택한 첨부파일이 있습니다. 저장하지 않고 닫으시겠습니까?")) return;
     dialogRef.current?.close();
   }
 
@@ -170,9 +186,25 @@ export function StudentFeedbackModal({ lessonId, data, authorOptions, blockedRea
           )}
         </section>
 
-        <section className="mt-8 border-t border-[var(--line)] pt-7" aria-labelledby="existing-modal-feedback-heading">
-          <div className="flex flex-wrap items-center justify-between gap-2"><h3 id="existing-modal-feedback-heading" className="text-lg font-bold">기존 피드백</h3><Link href={`/operator/students/${data.studentId}`} className="text-sm font-bold text-[var(--accent-strong)] underline">수정·첨부 관리</Link></div>
-          {items.length ? <div className="mt-5 space-y-5">{items.map((item) => <ExistingFeedbackItem key={item.id} item={item} />)}</div> : <p className="mt-4 text-[var(--muted)]">아직 작성된 피드백이 없습니다.</p>}
+        <section className="mt-8 border-t border-[var(--line)] pt-7" aria-labelledby="recent-modal-feedback-heading">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="recent-modal-feedback-heading" className="text-lg font-bold">기존 피드백</h3>
+            {hasMore ? (
+              <Link
+                href={`/operator/students/${data.studentId}/feedback`}
+                onClick={(event) => {
+                  if (saving || !confirmDiscard("작성 중인 피드백이나 선택한 첨부파일이 있습니다. 저장하지 않고 전체 피드백으로 이동하시겠습니까?")) event.preventDefault();
+                }}
+                className="inline-flex min-h-10 items-center text-sm font-bold text-[var(--accent-strong)] underline"
+              >
+                전체 보기
+              </Link>
+            ) : null}
+          </div>
+          {historyLoading ? <p role="status" className="mt-4 text-[var(--muted)]">기존 피드백을 불러오는 중입니다...</p> : null}
+          {historyError ? <p role="alert" className="mt-4 text-sm font-semibold text-rose-700">{historyError} <button type="button" onClick={() => void refreshHistory()} className="underline">다시 시도</button></p> : null}
+          {!historyLoading && !historyError && items.length ? <div className="mt-5 space-y-3">{items.map((item) => <OperatorFeedbackSummaryCard key={item.id} item={item} />)}</div> : null}
+          {!historyLoading && !historyError && !items.length ? <p className="mt-4 text-[var(--muted)]">아직 작성된 피드백이 없습니다.</p> : null}
         </section>
       </article>
     </dialog>

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requireOperatorAccess } from "@/lib/auth/operator-access";
-import { loadFeedbackAttachments } from "@/lib/feedback/attachments";
 import { getLessonDisplayStatusLabel } from "@/lib/lessons/display-status";
 import { syncElapsedLessonStatuses } from "@/lib/lessons/sync-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -55,19 +54,17 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   }
   if (access.isOwner) await syncElapsedLessonStatuses(supabase, [lesson.id]);
 
-  const [{ data: assignments, error: assignmentsError }, { data: students, error: studentsError }, { data: attendanceRecords, error: attendanceError }, { data: programs, error: programsError }, { data: staff, error: staffError }, { data: lessonStaff, error: lessonStaffError }, { data: feedback, error: feedbackError }] = await Promise.all([
+  const [{ data: assignments, error: assignmentsError }, { data: students, error: studentsError }, { data: attendanceRecords, error: attendanceError }, { data: programs, error: programsError }, { data: staff, error: staffError }, { data: lessonStaff, error: lessonStaffError }] = await Promise.all([
     supabase.from("lesson_assignments").select("student_id, student_program_id, assigned_at").eq("lesson_id", lessonId).is("unassigned_at", null).order("assigned_at"),
     supabase.from("students").select("id, nickname").order("nickname"),
     supabase.from("attendance_records").select("id, student_id, status").eq("lesson_id", lessonId),
     supabase.from("student_programs").select("id, student_id, program_type, status, base_allowance_count"),
     supabase.from("staff_profiles").select("id, display_name, role, is_active").order("display_name"),
     supabase.from("lesson_staff").select("staff_id, role").eq("lesson_id", lessonId),
-    supabase.from("lesson_feedback").select("id, student_id, author_staff_id, created_by, body, created_at, feedback_comments(count)").eq("lesson_id", lessonId).is("deleted_at", null).is("feedback_comments.deleted_at", null).order("created_at", { ascending: false }),
   ]);
-  if (assignmentsError || studentsError || attendanceError || programsError || staffError || lessonStaffError || feedbackError) {
-    throw new Error("일정과 학생 정보를 불러오지 못했습니다.", { cause: assignmentsError ?? studentsError ?? attendanceError ?? programsError ?? staffError ?? lessonStaffError ?? feedbackError });
+  if (assignmentsError || studentsError || attendanceError || programsError || staffError || lessonStaffError) {
+    throw new Error("일정과 학생 정보를 불러오지 못했습니다.", { cause: assignmentsError ?? studentsError ?? attendanceError ?? programsError ?? staffError ?? lessonStaffError });
   }
-  const feedbackAttachments = await loadFeedbackAttachments(supabase, (feedback ?? []).map((item) => item.id));
 
   const attendanceIds = attendanceRecords.map((record) => record.id);
   const { data: linkedMakeups, error: linkedMakeupsError } = attendanceIds.length
@@ -110,20 +107,9 @@ export default async function ScheduleDetailPage({ params, searchParams }: { par
   const assignedActiveStaff = activeStaff.filter((member) => assignedStaffIds.has(member.id));
   const assignedStaffRoles = new Map((lessonStaff ?? []).map((entry) => [entry.staff_id, entry.role]));
   const staffAssignmentOptions = staffProfiles.filter((member) => member.is_active || assignedStaffIds.has(member.id));
-  const staffNames = new Map(staffProfiles.map((member) => [member.id, member.display_name]));
   const feedbackByStudent = assignedStudents.map((student) => ({
     studentId: student.id,
     studentName: student.name,
-    items: (feedback ?? []).filter((item) => item.student_id === student.id).map((item) => ({
-      id: item.id,
-      body: item.body,
-      authorName: staffNames.get(item.author_staff_id) ?? "작성자 확인 불가",
-      createdAt: item.created_at,
-      commentCount: item.feedback_comments?.[0]?.count ?? 0,
-      attachments: feedbackAttachments.get(item.id) ?? [],
-      canEdit: access.isOwner || Boolean(isAssignedStaff && (item.created_by === access.authUserId || item.author_staff_id === access.staffProfileId)),
-      canDelete: access.isOwner,
-    })),
   }));
 
   const notice = notices.created === "1"

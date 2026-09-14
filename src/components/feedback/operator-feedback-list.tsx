@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import { FeedbackAttachments } from "@/components/feedback/feedback-attachments";
+import { OperatorFeedbackSummaryCard } from "@/components/feedback/operator-feedback-summary-card";
 import {
   deleteOwnFeedbackComment,
   updateFeedbackFromDialog,
@@ -120,7 +121,7 @@ export function OperatorFeedbackList({ items, emptyMessage }: { items: OperatorF
   function finishClose() { setSelected(null); triggerRef.current?.focus(); }
   if (!items.length) return <p className="mt-5 text-[var(--muted)]">{emptyMessage}</p>;
   return <>
-    <ol className="mt-5 space-y-3">{items.map((item) => <li key={item.id}><article className="rounded-xl border border-[var(--line)] p-4 sm:p-5"><div className="flex min-w-0 items-center justify-between gap-3"><time className="min-w-0 truncate text-sm font-bold text-[var(--accent-strong)]" dateTime={item.startsAt}>{formatDate(item.startsAt)}</time><button type="button" onClick={(event) => { triggerRef.current = event.currentTarget; setSelected(item); }} className="min-h-10 shrink-0 rounded-xl border border-[var(--accent)] px-3 text-sm font-bold text-[var(--accent-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">더보기</button></div><h3 className="mt-2 truncate text-lg font-bold">{item.lessonTitle}</h3><p className="mt-2 truncate">{item.body}</p><div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]"><span>{item.authorName} · 댓글 {item.commentCount}개</span><FeedbackAttachments feedbackId={item.id} initialItems={item.attachments} compact /></div></article></li>)}</ol>
+    <ol className="mt-5 space-y-3">{items.map((item) => <li key={item.id}><OperatorFeedbackSummaryCard item={item} onOpen={(trigger) => { triggerRef.current = trigger; setSelected(item); }} /></li>)}</ol>
     <dialog ref={dialogRef} aria-labelledby="operator-feedback-dialog-title" aria-modal="true" onCancel={(event) => { event.preventDefault(); close(); }} onClose={finishClose} className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-2xl overflow-hidden rounded-2xl border border-[var(--line)] bg-white p-0 text-[var(--foreground)] shadow-2xl backdrop:bg-[#102927]/55">{selected ? <FeedbackDialogContent key={selected.id} selected={selected} onChange={setSelected} close={close} /> : null}</dialog>
   </>;
 }
