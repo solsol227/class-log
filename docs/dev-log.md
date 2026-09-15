@@ -1,5 +1,11 @@
 # Class Log 개발 기록
 
+## 2026-09-16 — Codex — Supabase 백업 end-to-end 검증
+
+- 실제 Supabase CLI 2.117.0 linked DB에서 migration list 41개(local/remote 동일), schema 222,819 bytes, data 32,582 bytes, roles 370 bytes의 원문을 read-only로 확인했다. schema는 `CREATE TABLE IF NOT EXISTS "public"."..."`, data는 `COPY "public"."..." ("...") FROM stdin;` 형식이었다.
+- 수정: schema/data shape 검증을 평문·quoted identifier와 schema public 제한을 유지한 채 실제 dump 형식에 맞췄다. `IF NOT EXISTS`는 schema에서 선택적으로 허용하고, data의 COPY table·column identifier도 검증한다. migration fingerprint 전후 41개가 일치했다.
+- 확인: 실제 `npm run db:backup`이 schema/data/roles를 생성하고 최신 gzip이 schema 27,879 / data 8,304 / roles 223 bytes, 압축 해제 후 각각 222,819 / 32,582 / 370 bytes였다. partial/temp artifact 0개, `backups/` Git ignore, 14일 retention 및 실패 artifact 정리는 self-test로 확인했다. migration/RLS/실데이터와 사용자 untracked 파일은 변경하지 않았다.
+
 ## 2026-09-16 — Codex — Supabase dump shape 검증 보완
 
 - 수정: `Assert-SqlDumpShape`의 schema 검증이 `CREATE TABLE`의 평문·quoted identifier와 `IF NOT EXISTS` 유무를 허용하면서도 `public` schema만 통과시키도록 보완했다. data 검증의 기존 `COPY public.<table> (...) FROM stdin;` 패턴은 실제 형식과 일치해 변경하지 않았다.

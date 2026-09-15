@@ -275,11 +275,13 @@ function Assert-SqlDumpShape {
         [Parameter(Mandatory = $true)][ValidateSet('schema', 'data')][string]$Kind
     )
 
+    $publicSchemaPattern = '(?:(?-i:"public")|(?i:public))'
+    $identifierPattern = '(?:"(?:""|[^"])+"|[A-Za-z_][A-Za-z0-9_$]*)'
     $pattern = if ($Kind -eq 'schema') {
-        '^\s*CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:(?-i:"public")|(?i:public))\s*\.\s*(?:"(?:""|[^"])+"|[A-Za-z_][A-Za-z0-9_$]*)\s*(?:\(|$)'
+        '^\s*CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+' + $publicSchemaPattern + '\s*\.\s*' + $identifierPattern + '\s*(?:\(|$)'
     }
     else {
-        '^COPY public\..* FROM stdin;$'
+        '^\s*COPY\s+' + $publicSchemaPattern + '\s*\.\s*' + $identifierPattern + '(?:\s+\(\s*' + $identifierPattern + '(?:\s*,\s*' + $identifierPattern + ')*\s*\))?\s+FROM\s+stdin;$'
     }
 
     if (-not (Select-String -LiteralPath $Path -Pattern $pattern -Quiet)) {
@@ -458,9 +460,8 @@ function Invoke-SelfTest {
         Assert-TestCondition -Condition (-not (Test-Path -LiteralPath $failedRunGzip)) -Message '실패한 실행의 gzip partial을 제거해야 합니다.'
         Assert-TestCondition -Condition (Test-Path -LiteralPath $oldMatching) -Message '실패 정리에서 이전 정상 백업을 삭제하면 안 됩니다.'
 
-        foreach ($candidate in $candidates) {
-            Remove-Item -LiteralPath $candidate.FullName -Force
-        }
+        $retentionNow = [datetime]::ParseExact('2026-09-16_0000', 'yyyy-MM-dd_HHmm', [System.Globalization.CultureInfo]::InvariantCulture)
+        Invoke-RetentionCleanup -BackupRoot $fixtureRoot -RetentionDays 14 -NowKst $retentionNow -CurrentFileNames @('roles_2026-01-01_0000.sql.gz')
         Assert-TestCondition -Condition (-not (Test-Path -LiteralPath $oldMatching)) -Message '계획된 만료 파일은 삭제되어야 합니다.'
         Assert-TestCondition -Condition (Test-Path -LiteralPath $recentMatching) -Message 'cutoff 이후 파일은 유지되어야 합니다.'
         Assert-TestCondition -Condition (Test-Path -LiteralPath $currentMatching) -Message '현재 backup set은 유지되어야 합니다.'
@@ -478,6 +479,18 @@ function Invoke-SelfTest {
         $schemaShape = Join-Path $fixtureRoot 'shape-schema.sql'
         $quotedSchemaShape = Join-Path $fixtureRoot 'shape-schema-quoted.sql'
         $dataShape = Join-Path $fixtureRoot 'shape-data.sql'
+        $quotedDataShape = Join-Path $fixtureRoot 'shape-data-quoted.sql'
+        $quotedDataSql = @(
+            'COPY "public"."students" ("id", "nickname") FROM stdin;'
+            '\.'
+        ) -join [Environment]::NewLine
+        [System.IO.File]::WriteAllText($quotedDataShape, $quotedDataSql)
+        $wrongDataShape = Join-Path $fixtureRoot 'shape-data-wrong-schema.sql'
+        $wrongDataSql = @(
+            'COPY "private"."students" ("id") FROM stdin;'
+            '\.'
+        ) -join [Environment]::NewLine
+        [System.IO.File]::WriteAllText($wrongDataShape, $wrongDataSql)
         $quotedSchemaSql = @(
             'CREATE TABLE IF NOT EXISTS "public"."students" ('
             '    id uuid'
@@ -504,6 +517,15 @@ function Invoke-SelfTest {
         }
         Assert-TestCondition -Condition $wrongSchemaRejected -Message 'public 이외 schema의 CREATE TABLE을 거부해야 합니다.'
         Assert-SqlDumpShape -Path $dataShape -Kind data
+        Assert-SqlDumpShape -Path $quotedDataShape -Kind data
+        $wrongDataRejected = $false
+        try {
+            Assert-SqlDumpShape -Path $wrongDataShape -Kind data
+        }
+        catch {
+            $wrongDataRejected = $true
+        }
+        Assert-TestCondition -Condition $wrongDataRejected -Message 'public 이외 schema의 COPY data dump를 거부해야 합니다.'
 
         $tableMigrationOutput = " Local          | Remote         | Time`n----------------|----------------|----------------`n20260912000000 | 20260912000000 | 2026-09-12"
         $tableVersions = @(Get-MigrationVersionsFromOutput -Output $tableMigrationOutput)
