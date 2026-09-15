@@ -201,8 +201,9 @@ function Get-MigrationVersionsFromOutput {
 
     if ($remoteVersions.Count -eq 0) {
         foreach ($line in ($Output -split "`r?`n")) {
-            if ($line -match '^\s*(?:\d{14})?\s*\|\s*(\d{14})\s*\|') {
-                $remoteVersions.Add($Matches[1])
+            if ($line -match '^\s*(?:`\d{14}`|\d{14})?\s*\|\s*(?:`(\d{14})`|(\d{14}))\s*\|') {
+                $remoteVersion = if ($Matches[1]) { $Matches[1] } else { $Matches[2] }
+                $remoteVersions.Add($remoteVersion)
             }
         }
     }
@@ -476,6 +477,10 @@ function Invoke-SelfTest {
         $tableMigrationOutput = " Local          | Remote         | Time`n----------------|----------------|----------------`n20260912000000 | 20260912000000 | 2026-09-12"
         $tableVersions = @(Get-MigrationVersionsFromOutput -Output $tableMigrationOutput)
         Assert-TestCondition -Condition ($tableVersions.Count -eq 1 -and $tableVersions[0] -eq '20260912000000') -Message '표 형식 migration 목록을 해석해야 합니다.'
+
+        $quotedTableMigrationOutput = " Local          | Remote         | Time`n----------------|----------------|----------------`n``20260804000000`` | ``20260804000000`` | 2026-08-04"
+        $quotedTableVersions = @(Get-MigrationVersionsFromOutput -Output $quotedTableMigrationOutput)
+        Assert-TestCondition -Condition ($quotedTableVersions.Count -eq 1 -and $quotedTableVersions[0] -eq '20260804000000') -Message '백틱으로 감싼 표 형식 migration 목록을 해석해야 합니다.'
 
         $jsonMigrationOutput = "Initialising login role...`n{`"migrations`": [{`"local`": `"20260912000000`", `"remote`": `"20260912000000`", `"time`": `"2026-09-12`"}]}"
         $jsonVersions = @(Get-MigrationVersionsFromOutput -Output $jsonMigrationOutput)

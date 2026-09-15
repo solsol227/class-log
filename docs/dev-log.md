@@ -1,5 +1,10 @@
 # Class Log 개발 기록
 
+## 2026-09-16 — Codex — Supabase 백업 migration parser 백틱 호환
+
+- 수정: `Get-MigrationVersionsFromOutput`의 text-table parser가 local·remote 버전 열의 기존 평문 형식과 백틱으로 감싼 14자리 형식을 모두 읽도록 보완했다. JSON parser와 나머지 백업 동작은 변경하지 않았다.
+- 검증: `npm run db:backup:test`에 평문·백틱 표 형식 self-test를 추가하고 통과했다.
+
 ## 2026-09-14 — Codex — PR39 일정 modal 최근 이력·첨부 다운로드 교정
 
 - 기준: PR37·PR38이 병합된 최신 `origin/main` `8acac0b`와 일치하는 clean Codex 별도 worktree에서 `feat/recent-feedback-history`를 생성했다. 기존 migration, DB, Storage object와 사용자 데이터는 변경하지 않는다.
