@@ -105,8 +105,16 @@ function Invoke-SupabaseCommand {
         [Parameter(Mandatory = $true)][string]$Description
     )
 
-    $output = @(& supabase @Arguments 2>&1)
-    $exitCode = $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = @(& supabase @Arguments 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     if ($exitCode -ne 0) {
         $detail = Get-SafeCommandFailureDetail -Output $output
         throw "$Description 실패 (Supabase CLI 종료 코드 $exitCode).`n$detail"
@@ -481,6 +489,45 @@ function Invoke-SelfTest {
         $quotedTableMigrationOutput = " Local          | Remote         | Time`n----------------|----------------|----------------`n``20260804000000`` | ``20260804000000`` | 2026-08-04"
         $quotedTableVersions = @(Get-MigrationVersionsFromOutput -Output $quotedTableMigrationOutput)
         Assert-TestCondition -Condition ($quotedTableVersions.Count -eq 1 -and $quotedTableVersions[0] -eq '20260804000000') -Message '백틱으로 감싼 표 형식 migration 목록을 해석해야 합니다.'
+
+        $nativeCommandPath = Join-Path $fixtureRoot 'supabase.cmd'
+        $nativeSecret = 'native-stderr-secret'
+        $originalPath = $env:PATH
+        try {
+            $script:SecretValues.Add($nativeSecret)
+            $env:PATH = $fixtureRoot + [System.IO.Path]::PathSeparator + $originalPath
+
+            $successScript = @(
+                '@echo off'
+                'echo Connecting to remote database... 1>&2'
+                'echo migration output'
+                'exit /b 0'
+            ) -join [Environment]::NewLine
+            [System.IO.File]::WriteAllText($nativeCommandPath, $successScript)
+            $nativeOutput = Invoke-SupabaseCommand -Arguments @('migration', 'list') -Description 'native stderr self-test'
+            Assert-TestCondition -Condition ($nativeOutput -match 'Connecting to remote database...' -and $nativeOutput -match 'migration output') -Message '성공한 native stderr 진행 메시지를 수집해야 합니다.'
+            Assert-TestCondition -Condition ($ErrorActionPreference -eq 'Stop') -Message 'native command 이후 ErrorActionPreference를 복원해야 합니다.'
+
+            $failureScript = @(
+                '@echo off'
+                "echo CLI failure: $nativeSecret 1>&2"
+                'exit /b 7'
+            ) -join [Environment]::NewLine
+            [System.IO.File]::WriteAllText($nativeCommandPath, $failureScript)
+            $failureMessage = $null
+            try {
+                Invoke-SupabaseCommand -Arguments @('migration', 'list') -Description 'native stderr failure self-test' | Out-Null
+            }
+            catch {
+                $failureMessage = $_.Exception.Message
+            }
+            Assert-TestCondition -Condition ($failureMessage -match '종료 코드 7' -and $failureMessage -match 'CLI failure' -and $failureMessage -match '\[비밀값 숨김\]' -and -not ($failureMessage -match [regex]::Escape($nativeSecret))) -Message 'native command 종료 코드와 안전한 stderr 상세 오류를 처리해야 합니다.'
+            Assert-TestCondition -Condition ($ErrorActionPreference -eq 'Stop') -Message 'native command 실패 이후 ErrorActionPreference를 복원해야 합니다.'
+        }
+        finally {
+            $env:PATH = $originalPath
+            $script:SecretValues.Remove($nativeSecret) | Out-Null
+        }
 
         $jsonMigrationOutput = "Initialising login role...`n{`"migrations`": [{`"local`": `"20260912000000`", `"remote`": `"20260912000000`", `"time`": `"2026-09-12`"}]}"
         $jsonVersions = @(Get-MigrationVersionsFromOutput -Output $jsonMigrationOutput)

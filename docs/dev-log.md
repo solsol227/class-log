@@ -1,5 +1,10 @@
 # Class Log 개발 기록
 
+## 2026-09-16 — Codex — Supabase CLI native stderr 처리
+
+- 수정: `Invoke-SupabaseCommand`가 native CLI 호출 동안에만 `ErrorActionPreference`를 `Continue`로 적용해 정상 stderr 진행 메시지를 안전하게 수집하고, 호출 직후 `$LASTEXITCODE`로 성공·실패를 판정하도록 보완했다. 호출 전 전역 설정은 `finally`에서 복원한다.
+- 검증: self-test mock CLI로 stdout/stderr 수집, 종료 코드 0 진행 메시지, 종료 코드 7 실패 상세, secret masking, `ErrorActionPreference` 복원을 확인했다. schema/data/roles dump·migration fingerprint·retention 흐름은 변경하지 않았다.
+
 ## 2026-09-16 — Codex — Supabase 백업 migration parser 백틱 호환
 
 - 수정: `Get-MigrationVersionsFromOutput`의 text-table parser가 local·remote 버전 열의 기존 평문 형식과 백틱으로 감싼 14자리 형식을 모두 읽도록 보완했다. JSON parser와 나머지 백업 동작은 변경하지 않았다.
