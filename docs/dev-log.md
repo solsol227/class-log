@@ -1,5 +1,10 @@
 # Class Log 개발 기록
 
+## 2026-09-16 — Codex — Supabase dump shape 검증 보완
+
+- 수정: `Assert-SqlDumpShape`의 schema 검증이 `CREATE TABLE`의 평문·quoted identifier와 `IF NOT EXISTS` 유무를 허용하면서도 `public` schema만 통과시키도록 보완했다. data 검증의 기존 `COPY public.<table> (...) FROM stdin;` 패턴은 실제 형식과 일치해 변경하지 않았다.
+- 검증: 기존 평문 schema/data fixture를 유지하고 실제 quoted schema dump 예시와 public 이외 schema 거부 self-test를 추가했다.
+
 ## 2026-09-16 — Codex — Supabase CLI native stderr 처리
 
 - 수정: `Invoke-SupabaseCommand`가 native CLI 호출 동안에만 `ErrorActionPreference`를 `Continue`로 적용해 정상 stderr 진행 메시지를 안전하게 수집하고, 호출 직후 `$LASTEXITCODE`로 성공·실패를 판정하도록 보완했다. 호출 전 전역 설정은 `finally`에서 복원한다.

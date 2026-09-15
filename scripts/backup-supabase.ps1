@@ -276,7 +276,7 @@ function Assert-SqlDumpShape {
     )
 
     $pattern = if ($Kind -eq 'schema') {
-        '^CREATE TABLE public\.'
+        '^\s*CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:(?-i:"public")|(?i:public))\s*\.\s*(?:"(?:""|[^"])+"|[A-Za-z_][A-Za-z0-9_$]*)\s*(?:\(|$)'
     }
     else {
         '^COPY public\..* FROM stdin;$'
@@ -476,10 +476,33 @@ function Invoke-SelfTest {
         Assert-TestCondition -Condition ((Get-Item -LiteralPath $gzipDestination).Length -gt 0) -Message 'gzip 파일은 0 byte보다 커야 합니다.'
 
         $schemaShape = Join-Path $fixtureRoot 'shape-schema.sql'
+        $quotedSchemaShape = Join-Path $fixtureRoot 'shape-schema-quoted.sql'
         $dataShape = Join-Path $fixtureRoot 'shape-data.sql'
+        $quotedSchemaSql = @(
+            'CREATE TABLE IF NOT EXISTS "public"."students" ('
+            '    id uuid'
+            ');'
+        ) -join [Environment]::NewLine
+        [System.IO.File]::WriteAllText($quotedSchemaShape, $quotedSchemaSql)
+        $wrongSchemaShape = Join-Path $fixtureRoot 'shape-schema-wrong-schema.sql'
+        $wrongSchemaSql = @(
+            'CREATE TABLE IF NOT EXISTS "private"."students" ('
+            '    id uuid'
+            ');'
+        ) -join [Environment]::NewLine
+        [System.IO.File]::WriteAllText($wrongSchemaShape, $wrongSchemaSql)
         [System.IO.File]::WriteAllText($schemaShape, "CREATE TABLE public.students (`n    id uuid`n);`n")
         [System.IO.File]::WriteAllText($dataShape, "COPY public.students (id) FROM stdin;`n\.`n")
         Assert-SqlDumpShape -Path $schemaShape -Kind schema
+        Assert-SqlDumpShape -Path $quotedSchemaShape -Kind schema
+        $wrongSchemaRejected = $false
+        try {
+            Assert-SqlDumpShape -Path $wrongSchemaShape -Kind schema
+        }
+        catch {
+            $wrongSchemaRejected = $true
+        }
+        Assert-TestCondition -Condition $wrongSchemaRejected -Message 'public 이외 schema의 CREATE TABLE을 거부해야 합니다.'
         Assert-SqlDumpShape -Path $dataShape -Kind data
 
         $tableMigrationOutput = " Local          | Remote         | Time`n----------------|----------------|----------------`n20260912000000 | 20260912000000 | 2026-09-12"
